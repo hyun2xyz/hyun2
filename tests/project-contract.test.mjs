@@ -58,6 +58,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(client, /saved-as-new-row/);
   assert.match(client, /cloneLockedPost/);
   assert.match(app, /reader is updated/);
+  assert.match(app, /dedupePostTitles/);
   assert.match(css, /--body-line-height/);
   assert.match(css, /--paragraph-gap/);
   assert.match(app, /--paragraph-gap/);

@@ -218,6 +218,17 @@ function renderReaderIndex(posts, selectedSlug) {
   `;
 }
 
+function dedupePostTitles(posts) {
+  const seen = new Set();
+
+  return posts.filter((post) => {
+    const key = String(post.title || post.slug).trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function renderReader(article, posts = []) {
   const root = document.querySelector('#article-root');
   const view = normalizeArticle(article);
@@ -355,7 +366,7 @@ async function loadAdminState(session, options = {}) {
   if (hasSupabaseConfig() && session?.access_token) {
     const titleResult = await listPostTitles(session.access_token);
     if (titleResult.ok) {
-      posts = titleResult.posts;
+      posts = dedupePostTitles(titleResult.posts);
     } else {
       source = `supabase index failed: ${titleResult.reason}`;
     }
@@ -528,7 +539,7 @@ async function renderPublicPage() {
 
   const titleResult = await listPostTitles();
   if (titleResult.ok) {
-    posts = titleResult.posts;
+    posts = dedupePostTitles(titleResult.posts);
   }
 
   renderReader(article, posts);
