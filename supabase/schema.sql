@@ -15,6 +15,10 @@ create table if not exists public.posts (
 
 alter table public.posts enable row level security;
 
+grant usage on schema public to anon, authenticated;
+grant select on table public.posts to anon;
+grant select, insert, update, delete on table public.posts to authenticated;
+
 create or replace function public.set_post_updated_at()
 returns trigger
 language plpgsql
@@ -38,26 +42,15 @@ to anon, authenticated
 using (status = 'published');
 
 drop policy if exists "authors can create own posts" on public.posts;
-create policy "authors can create own posts"
-on public.posts
-for insert
-to authenticated
-with check (author_id = auth.uid());
-
 drop policy if exists "authors can update own posts" on public.posts;
-create policy "authors can update own posts"
-on public.posts
-for update
-to authenticated
-using (author_id = auth.uid())
-with check (author_id = auth.uid());
-
 drop policy if exists "authors can read own posts" on public.posts;
-create policy "authors can read own posts"
+drop policy if exists "authenticated users can manage posts" on public.posts;
+create policy "authenticated users can manage posts"
 on public.posts
-for select
+for all
 to authenticated
-using (author_id = auth.uid());
+using ((select auth.uid()) is not null and (author_id is null or author_id = (select auth.uid())))
+with check ((select auth.uid()) is not null and (author_id is null or author_id = (select auth.uid())));
 
 create index if not exists posts_status_published_at_idx
 on public.posts (status, published_at desc);

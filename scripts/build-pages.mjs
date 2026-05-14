@@ -8,6 +8,7 @@ await mkdir(dist, { recursive: true });
 await mkdir(new URL('src/', dist), { recursive: true });
 
 await cp(new URL('index.html', root), new URL('index.html', dist));
+await cp(new URL('admin.html', root), new URL('admin.html', dist));
 await cp(new URL('styles.css', root), new URL('styles.css', dist));
 await cp(new URL('src/app.js', root), new URL('src/app.js', dist));
 await cp(new URL('src/supabase-client.js', root), new URL('src/supabase-client.js', dist));

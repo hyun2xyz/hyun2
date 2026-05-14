@@ -14,6 +14,7 @@ test('home page renders a centered writing draft', async () => {
   const app = await file('src/app.js');
 
   assert.match(html, /id="article-root"/);
+  assert.doesNotMatch(html, /data-admin/);
   assert.match(css, /background:\s*#fff/);
   assert.match(css, /color:\s*#000/);
   assert.match(app, /가안:/);
@@ -28,13 +29,21 @@ test('Supabase client is wired to the target project without secret keys', async
   assert.doesNotMatch(config, /service_role|sb_secret_/i);
   assert.match(client, /\/rest\/v1\/posts/);
   assert.match(client, /status=eq\.published/);
+  assert.match(client, /listPostTitles/);
+  assert.match(client, /getPostBySlug/);
 });
 
-test('edit mode can sign in and save writing from the web page', async () => {
+test('admin page can sign in, list titles, set pt sizes, and save writing', async () => {
+  const adminHtml = await file('admin.html');
   const app = await file('src/app.js');
   const client = await file('src/supabase-client.js');
 
-  assert.match(app, /URLSearchParams\(window\.location\.search\)\.has\('edit'\)/);
+  assert.match(adminHtml, /data-admin="true"/);
+  assert.match(app, /isAdminPage/);
+  assert.match(app, /data-panel="index"/);
+  assert.match(app, /name="titleSizePt"/);
+  assert.match(app, /name="bodySizePt"/);
+  assert.match(app, /pt/);
   assert.match(app, /contenteditable="true"/);
   assert.match(app, /data-action="save"/);
   assert.match(app, /localStorage/);
@@ -52,6 +61,7 @@ test('database schema enables RLS and public readers only see published posts', 
   assert.match(schema, /status = 'published'/i);
   assert.match(schema, /auth\.uid\(\)/i);
   assert.match(schema, /set_post_updated_at/i);
+  assert.match(schema, /authenticated users can manage posts/i);
 });
 
 test('GitHub push can deploy the static site through Pages actions', async () => {
@@ -63,4 +73,5 @@ test('GitHub push can deploy the static site through Pages actions', async () =>
   assert.match(workflow, /deploy-pages/);
   assert.match(workflow, /branches:\s*\[\s*main\s*\]/);
   assert.match(buildScript, /dist/);
+  assert.match(buildScript, /admin\.html/);
 });

@@ -4,6 +4,8 @@ const POSTS_ENDPOINT = `${SUPABASE_URL}/rest/v1/posts`;
 const AUTH_TOKEN_ENDPOINT = `${SUPABASE_URL}/auth/v1/token?grant_type=password`;
 const PUBLISHED_STATUS_QUERY = 'status=eq.published';
 const UPSERT_MODE = 'upsert';
+const POST_SELECT = 'id,author_id,title,slug,content,excerpt,status,published_at,updated_at';
+const TITLE_SELECT = 'id,title,slug,status,published_at,updated_at';
 
 export function hasSupabaseConfig() {
   return Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
@@ -34,12 +36,63 @@ export async function getLatestPublishedPost(fetchImpl = fetch) {
 
   const url = new URL(POSTS_ENDPOINT);
   const [statusField, statusValue] = PUBLISHED_STATUS_QUERY.split('=');
-  url.searchParams.set('select', 'id,title,slug,content,excerpt,status,published_at,updated_at');
+  url.searchParams.set('select', POST_SELECT);
   url.searchParams.set(statusField, statusValue);
   url.searchParams.set('order', 'published_at.desc.nullslast,updated_at.desc');
   url.searchParams.set('limit', '1');
 
   const response = await fetchImpl(url, { headers: publicHeaders() });
+
+  if (!response.ok) {
+    return { ok: false, reason: `http-${response.status}`, post: null };
+  }
+
+  const rows = await response.json();
+  return { ok: true, reason: 'loaded', post: rows[0] ?? null };
+}
+
+export async function listPostTitles(accessToken = null, fetchImpl = fetch) {
+  if (!hasSupabaseConfig()) {
+    return { ok: false, reason: 'missing-config', posts: [] };
+  }
+
+  const url = new URL(POSTS_ENDPOINT);
+  url.searchParams.set('select', TITLE_SELECT);
+  url.searchParams.set('order', 'published_at.desc.nullslast,updated_at.desc');
+
+  const headers = accessToken ? authHeaders(accessToken) : publicHeaders();
+  if (!accessToken) {
+    const [statusField, statusValue] = PUBLISHED_STATUS_QUERY.split('=');
+    url.searchParams.set(statusField, statusValue);
+  }
+
+  const response = await fetchImpl(url, { headers });
+
+  if (!response.ok) {
+    return { ok: false, reason: `http-${response.status}`, posts: [] };
+  }
+
+  const rows = await response.json();
+  return { ok: true, reason: 'loaded', posts: rows };
+}
+
+export async function getPostBySlug(slug, accessToken = null, fetchImpl = fetch) {
+  if (!hasSupabaseConfig() || !slug) {
+    return { ok: false, reason: 'missing-slug', post: null };
+  }
+
+  const url = new URL(POSTS_ENDPOINT);
+  url.searchParams.set('select', POST_SELECT);
+  url.searchParams.set('slug', `eq.${slug}`);
+  url.searchParams.set('limit', '1');
+
+  const headers = accessToken ? authHeaders(accessToken) : publicHeaders();
+  if (!accessToken) {
+    const [statusField, statusValue] = PUBLISHED_STATUS_QUERY.split('=');
+    url.searchParams.set(statusField, statusValue);
+  }
+
+  const response = await fetchImpl(url, { headers });
 
   if (!response.ok) {
     return { ok: false, reason: `http-${response.status}`, post: null };
@@ -79,8 +132,8 @@ export async function getEditablePost(userId, accessToken, fetchImpl = fetch) {
   }
 
   const url = new URL(POSTS_ENDPOINT);
-  url.searchParams.set('select', 'id,author_id,title,slug,content,excerpt,status,published_at,updated_at');
-  url.searchParams.set('author_id', `eq.${userId}`);
+  url.searchParams.set('select', POST_SELECT);
+  url.searchParams.set('or', `(author_id.eq.${userId},author_id.is.null)`);
   url.searchParams.set('order', 'updated_at.desc');
   url.searchParams.set('limit', '1');
 
@@ -104,6 +157,7 @@ export async function savePost(post, accessToken, fetchImpl = fetch) {
   const payload = {
     title: post.title,
     slug: post.slug,
+    author_id: post.author_id,
     excerpt: post.excerpt,
     content: post.content,
     status: post.status,
