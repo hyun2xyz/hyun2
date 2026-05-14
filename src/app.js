@@ -6,7 +6,7 @@ import {
   listPostTitles,
   savePost,
   signInWithPassword
-} from './supabase-client.js';
+} from './supabase-client.js?v=20260514-2030';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';

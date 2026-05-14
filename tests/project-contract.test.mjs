@@ -15,6 +15,7 @@ test('home page renders a centered writing draft', async () => {
 
   assert.match(html, /id="article-root"/);
   assert.doesNotMatch(html, /data-admin/);
+  assert.match(html, /src="\.\/src\/app\.js\?v=/);
   assert.match(css, /background:\s*#fff/);
   assert.match(css, /color:\s*#000/);
   assert.match(app, /가안:/);
@@ -41,7 +42,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   const css = await file('styles.css');
 
   assert.match(adminHtml, /data-admin="true"/);
+  assert.match(adminHtml, /src="\.\/src\/app\.js\?v=/);
   assert.match(app, /isAdminPage/);
+  assert.match(app, /supabase-client\.js\?v=/);
   assert.match(app, /data-panel="index"/);
   assert.match(app, /name="titleSizePt"/);
   assert.match(app, /name="bodySizePt"/);
