@@ -37,12 +37,15 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   const adminHtml = await file('admin.html');
   const app = await file('src/app.js');
   const client = await file('src/supabase-client.js');
+  const css = await file('styles.css');
 
   assert.match(adminHtml, /data-admin="true"/);
   assert.match(app, /isAdminPage/);
   assert.match(app, /data-panel="index"/);
   assert.match(app, /name="titleSizePt"/);
   assert.match(app, /name="bodySizePt"/);
+  assert.match(app, /name="bodyLineHeight"/);
+  assert.match(app, /bodyLineHeight/);
   assert.match(app, /pt/);
   assert.match(app, /contenteditable="true"/);
   assert.match(app, /data-action="save"/);
@@ -50,6 +53,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(client, /\/auth\/v1\/token\?grant_type=password/);
   assert.match(client, /savePost/);
   assert.match(client, /upsert/);
+  assert.match(client, /no-returned-row/);
+  assert.match(css, /--body-line-height/);
 });
 
 test('database schema enables RLS and public readers only see published posts', async () => {

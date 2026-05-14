@@ -13,7 +13,8 @@ const SESSION_KEY = 'hyun2.supabaseSession';
 const TYPE_SETTINGS_KEY = 'hyun2.typeSettings';
 const DEFAULT_TYPE_SETTINGS = {
   titleSizePt: 44,
-  bodySizePt: 20
+  bodySizePt: 20,
+  bodyLineHeight: 1.85
 };
 
 const fallbackArticle = {
@@ -66,10 +67,17 @@ function clampPt(value, fallback) {
   return Math.min(120, Math.max(8, next));
 }
 
+function clampLineHeight(value, fallback) {
+  const next = Number.parseFloat(value);
+  if (!Number.isFinite(next)) return fallback;
+  return Math.min(3, Math.max(1, next));
+}
+
 function normalizeTypeSettings(settings = {}) {
   return {
     titleSizePt: clampPt(settings.titleSizePt, DEFAULT_TYPE_SETTINGS.titleSizePt),
-    bodySizePt: clampPt(settings.bodySizePt, DEFAULT_TYPE_SETTINGS.bodySizePt)
+    bodySizePt: clampPt(settings.bodySizePt, DEFAULT_TYPE_SETTINGS.bodySizePt),
+    bodyLineHeight: clampLineHeight(settings.bodyLineHeight, DEFAULT_TYPE_SETTINGS.bodyLineHeight)
   };
 }
 
@@ -178,6 +186,7 @@ function applyTypeStyle(container, settings) {
   const style = normalizeTypeSettings(settings);
   container.style.setProperty('--title-size', `${style.titleSizePt}pt`);
   container.style.setProperty('--body-size', `${style.bodySizePt}pt`);
+  container.style.setProperty('--body-line-height', style.bodyLineHeight);
 }
 
 function articleMarkup(article, source = 'local') {
@@ -271,7 +280,8 @@ function renderLogin(statusText = '') {
 function readTypeSettingsFromDom(article) {
   return normalizeTypeSettings({
     titleSizePt: document.querySelector('[name="titleSizePt"]')?.value ?? article.style?.titleSizePt,
-    bodySizePt: document.querySelector('[name="bodySizePt"]')?.value ?? article.style?.bodySizePt
+    bodySizePt: document.querySelector('[name="bodySizePt"]')?.value ?? article.style?.bodySizePt,
+    bodyLineHeight: document.querySelector('[name="bodyLineHeight"]')?.value ?? article.style?.bodyLineHeight
   });
 }
 
@@ -301,6 +311,18 @@ function articleForSupabase(article) {
     ...next,
     content: encodeContent(next.content, next.style)
   };
+}
+
+function saveFailureMessage(reason) {
+  if (reason === 'no-returned-row') {
+    return 'no row updated. Run supabase/schema.sql in Supabase SQL Editor.';
+  }
+
+  if (reason === 'http-401') {
+    return 'login expired. logout and login again.';
+  }
+
+  return reason;
 }
 
 function renderAdminIndex(posts, selectedSlug) {
@@ -407,6 +429,10 @@ async function renderEditor(options = {}) {
             body
             <span><input name="bodySizePt" type="number" min="8" max="120" step="1" value="${style.bodySizePt}"> pt</span>
           </label>
+          <label>
+            line
+            <span><input name="bodyLineHeight" type="number" min="1" max="3" step="0.05" value="${style.bodyLineHeight}"></span>
+          </label>
         </div>
 
         <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(article.title)}</h1>
@@ -416,7 +442,7 @@ async function renderEditor(options = {}) {
     </div>
   `;
 
-  root.querySelectorAll('[name="titleSizePt"], [name="bodySizePt"]').forEach((input) => {
+  root.querySelectorAll('[name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"]').forEach((input) => {
     input.addEventListener('input', () => {
       const nextStyle = readTypeSettingsFromDom(currentArticle());
       saveTypeSettings(nextStyle);
@@ -466,7 +492,7 @@ async function renderEditor(options = {}) {
       return;
     }
 
-    await renderEditor({ statusText: `local saved, Supabase failed: ${result.reason}` });
+    await renderEditor({ statusText: `local saved. Supabase failed: ${saveFailureMessage(result.reason)}` });
   });
 
   root.querySelector('[data-action="logout"]')?.addEventListener('click', async () => {

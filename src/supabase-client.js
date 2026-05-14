@@ -3,7 +3,7 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase-config.js';
 const POSTS_ENDPOINT = `${SUPABASE_URL}/rest/v1/posts`;
 const AUTH_TOKEN_ENDPOINT = `${SUPABASE_URL}/auth/v1/token?grant_type=password`;
 const PUBLISHED_STATUS_QUERY = 'status=eq.published';
-const UPSERT_MODE = 'upsert';
+const upsertPreferHeader = 'resolution=merge-duplicates,return=representation';
 const POST_SELECT = 'id,author_id,title,slug,content,excerpt,status,published_at,updated_at';
 const TITLE_SELECT = 'id,title,slug,status,published_at,updated_at';
 
@@ -179,7 +179,7 @@ export async function savePost(post, accessToken, fetchImpl = fetch) {
     headers: authHeaders(accessToken, {
       'Content-Type': 'application/json',
       Prefer: method === 'POST'
-        ? `resolution=merge-duplicates,return=representation,missing=default; mode=${UPSERT_MODE}`
+        ? upsertPreferHeader
         : 'return=representation'
     }),
     body: JSON.stringify(method === 'POST' ? [payload] : payload)
@@ -191,5 +191,10 @@ export async function savePost(post, accessToken, fetchImpl = fetch) {
     return { ok: false, reason: `http-${response.status}`, post: null };
   }
 
-  return { ok: true, reason: 'saved', post: Array.isArray(rows) ? rows[0] : rows };
+  const savedPost = Array.isArray(rows) ? rows[0] : rows;
+  if (!savedPost) {
+    return { ok: false, reason: 'no-returned-row', post: null };
+  }
+
+  return { ok: true, reason: 'saved', post: savedPost };
 }

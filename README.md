@@ -7,7 +7,7 @@ The first slice is intentionally small:
 - Centered public article page
 - Reader index with title-only links
 - Separate author page at `/admin.html`
-- Web editor with publish toggle and pt-based title/body type settings
+- Web editor with publish toggle, pt-based title/body type settings, and line-height control
 - Supabase REST client prepared for published posts
 - RLS schema for public readers and authenticated author writes
 - GitHub Pages deployment on every push to `main`
@@ -29,7 +29,7 @@ Open `http://127.0.0.1:5179`.
 3. Keep service role and secret keys out of this repo.
 4. Visit `/admin.html` to edit from the web page. With no key configured, it saves a local draft.
 
-The public page reads published posts only. The admin page can list titles, open drafts, change title/body sizes in `pt`, and save the article body plus type settings.
+The public page reads published posts only. The admin page can list titles, open drafts, change title/body sizes in `pt`, adjust line height, and save the article body plus type settings.
 
 Safe live setup:
 
