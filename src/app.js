@@ -109,15 +109,6 @@ function encodeContent(body, style) {
   }, null, 2);
 }
 
-function formatDate(value) {
-  if (!value) return 'draft';
-  return new Intl.DateTimeFormat('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  }).format(new Date(value));
-}
-
 function loadTypeSettings(fallback = DEFAULT_TYPE_SETTINGS) {
   try {
     return normalizeTypeSettings(JSON.parse(localStorage.getItem(TYPE_SETTINGS_KEY)) ?? fallback);
@@ -184,17 +175,18 @@ function setCurrentArticle(article) {
 
 function applyTypeStyle(container, settings) {
   const style = normalizeTypeSettings(settings);
+  const paragraphGap = Math.max(0.35, style.bodyLineHeight * 0.55).toFixed(2);
   container.style.setProperty('--title-size', `${style.titleSizePt}pt`);
   container.style.setProperty('--body-size', `${style.bodySizePt}pt`);
   container.style.setProperty('--body-line-height', style.bodyLineHeight);
+  container.style.setProperty('--paragraph-gap', `${paragraphGap}em`);
 }
 
-function articleMarkup(article, source = 'local') {
+function articleMarkup(article) {
   const view = normalizeArticle(article);
   const paragraphs = splitParagraphs(view.content);
 
   return `
-    <div class="article__meta">${escapeHtml(source)} · ${formatDate(view.published_at ?? view.updated_at)}</div>
     <h1 class="article__title">${escapeHtml(view.title)}</h1>
     <div class="article__body">
       ${paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('')}
@@ -202,11 +194,11 @@ function articleMarkup(article, source = 'local') {
   `;
 }
 
-export function renderArticle(article, source = 'local') {
+export function renderArticle(article) {
   const root = document.querySelector('#article-root');
   const view = normalizeArticle(article);
   applyTypeStyle(root, view.style);
-  root.innerHTML = articleMarkup(view, source);
+  root.innerHTML = articleMarkup(view);
 }
 
 function renderReaderIndex(posts, selectedSlug) {
@@ -226,7 +218,7 @@ function renderReaderIndex(posts, selectedSlug) {
   `;
 }
 
-function renderReader(article, source = 'local', posts = []) {
+function renderReader(article, posts = []) {
   const root = document.querySelector('#article-root');
   const view = normalizeArticle(article);
   applyTypeStyle(root, view.style);
@@ -235,7 +227,7 @@ function renderReader(article, source = 'local', posts = []) {
     <div class="reader-layout">
       ${renderReaderIndex(posts, view.slug)}
       <article class="reader-article">
-        ${articleMarkup(view, source)}
+        ${articleMarkup(view)}
       </article>
     </div>
   `;
@@ -343,7 +335,7 @@ function renderAdminIndex(posts, selectedSlug) {
 async function loadAdminState(session, options = {}) {
   let article = options.article ? normalizeArticle(options.article) : currentArticle();
   let posts = [];
-  let source = hasSupabaseConfig() ? 'supabase ready' : 'local only';
+  let source = hasSupabaseConfig() ? 'connected' : 'local only';
 
   if (hasSupabaseConfig() && session?.access_token) {
     const titleResult = await listPostTitles(session.access_token);
@@ -381,13 +373,12 @@ async function renderEditor(options = {}) {
     return;
   }
 
-  let { article, posts, source } = await loadAdminState(session, options);
+  let { article, posts } = await loadAdminState(session, options);
 
   if (hasSupabaseConfig() && session?.access_token && session?.user?.id && !options.article && !article.id) {
     const result = await getEditablePost(session.user.id, session.access_token);
     if (result.ok && result.post) {
       article = normalizeArticle(result.post);
-      source = 'supabase';
     }
   }
 
@@ -410,7 +401,6 @@ async function renderEditor(options = {}) {
 
       <section class="editor" data-panel="editor">
         <div class="editor__bar">
-          <span>${escapeHtml(source)}</span>
           <label class="status-toggle">
             <input data-field="status" type="checkbox" ${article.status === 'published' ? 'checked' : ''}>
             publish
@@ -505,10 +495,9 @@ async function renderPublicPage() {
   const requestedSlug = routeParams.get('post') ?? routeParams.get('slug');
   const local = currentArticle();
   let article = local;
-  let source = 'local';
   let posts = local.slug ? [{ title: local.title, slug: local.slug, status: local.status }] : [];
 
-  renderArticle(local, source);
+  renderArticle(local);
 
   const postResult = requestedSlug
     ? await getPostBySlug(requestedSlug)
@@ -516,7 +505,6 @@ async function renderPublicPage() {
 
   if (postResult.ok && postResult.post) {
     article = normalizeArticle(postResult.post);
-    source = 'supabase';
     setCurrentArticle(article);
   }
 
@@ -525,7 +513,7 @@ async function renderPublicPage() {
     posts = titleResult.posts;
   }
 
-  renderReader(article, source, posts);
+  renderReader(article, posts);
 }
 
 async function boot() {

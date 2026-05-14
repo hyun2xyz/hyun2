@@ -110,7 +110,6 @@ input {
   margin-bottom: 16px;
 }
 
-.article__meta,
 .editor__note,
 .editor__status,
 .editor__bar {
@@ -120,10 +119,6 @@ input {
     Menlo,
     monospace;
   font-size: 0.78rem;
-}
-
-.article__meta {
-  margin-bottom: 22px;
 }
 
 .article__title {
@@ -136,7 +131,7 @@ input {
 
 .article__body {
   display: grid;
-  gap: 1rem;
+  gap: var(--paragraph-gap, 1rem);
   font-size: var(--body-size, 20pt);
   line-height: var(--body-line-height, 1.85);
   word-break: keep-all;

@@ -19,6 +19,7 @@ test('home page renders a centered writing draft', async () => {
   assert.match(css, /color:\s*#000/);
   assert.match(app, /가안:/);
   assert.match(app, /renderArticle/);
+  assert.doesNotMatch(app, /article__meta/);
 });
 
 test('Supabase client is wired to the target project without secret keys', async () => {
@@ -55,6 +56,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(client, /upsert/);
   assert.match(client, /no-returned-row/);
   assert.match(css, /--body-line-height/);
+  assert.match(css, /--paragraph-gap/);
+  assert.match(app, /--paragraph-gap/);
+  assert.doesNotMatch(app, /supabase ready/);
 });
 
 test('database schema enables RLS and public readers only see published posts', async () => {
