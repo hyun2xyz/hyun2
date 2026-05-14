@@ -53,6 +53,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /pt/);
   assert.match(app, /contenteditable="true"/);
   assert.match(app, /data-action="save"/);
+  assert.match(app, /savePostWithSession/);
+  assert.match(app, /refreshSessionIfNeeded/);
   assert.doesNotMatch(app, /data-field="status"/);
   assert.doesNotMatch(app, /status-toggle/);
   assert.doesNotMatch(app, /saved as draft/);

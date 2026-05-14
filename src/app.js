@@ -4,9 +4,10 @@ import {
   getPostBySlug,
   hasSupabaseConfig,
   listPostTitles,
-  savePost,
+  refreshSession,
+  savePostWithSession,
   signInWithPassword
-} from './supabase-client.js?v=20260514-2105';
+} from './supabase-client.js?v=20260514-2145';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
@@ -151,6 +152,58 @@ function saveSession(session) {
 
 function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+}
+
+function decodeBase64Url(value) {
+  const normalized = String(value)
+    .replaceAll('-', '+')
+    .replaceAll('_', '/');
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  return atob(padded);
+}
+
+function accessTokenExpiryMs(session) {
+  const expiresAt = Number(session?.expires_at);
+  if (Number.isFinite(expiresAt)) return expiresAt * 1000;
+
+  try {
+    const [, payload] = String(session?.access_token ?? '').split('.');
+    if (!payload) return 0;
+    const parsed = JSON.parse(decodeBase64Url(payload));
+    return Number(parsed.exp) * 1000;
+  } catch {
+    return 0;
+  }
+}
+
+function sessionNeedsRefresh(session) {
+  if (!session?.refresh_token) return false;
+  const expiryMs = accessTokenExpiryMs(session);
+  return Boolean(expiryMs && expiryMs - Date.now() < 60000);
+}
+
+async function refreshStoredSession(session) {
+  const result = await refreshSession(session?.refresh_token);
+  if (!result.ok) return result;
+
+  const nextSession = {
+    ...session,
+    ...result.session
+  };
+  saveSession(nextSession);
+
+  return {
+    ...result,
+    session: nextSession
+  };
+}
+
+async function refreshSessionIfNeeded(session) {
+  if (!sessionNeedsRefresh(session)) {
+    return { ok: true, reason: 'current', session };
+  }
+
+  return refreshStoredSession(session);
 }
 
 function normalizeArticle(article = fallbackArticle) {
@@ -389,10 +442,20 @@ async function loadAdminState(session, options = {}) {
 }
 
 async function renderEditor(options = {}) {
-  const session = loadSession();
+  let session = loadSession();
   if (hasSupabaseConfig() && !session) {
     renderLogin(options.statusText);
     return;
+  }
+
+  if (hasSupabaseConfig() && session) {
+    const refreshResult = await refreshSessionIfNeeded(session);
+    if (!refreshResult.ok) {
+      clearSession();
+      renderLogin('login expired. login again.');
+      return;
+    }
+    session = refreshResult.session;
   }
 
   let { article, posts } = await loadAdminState(session, options);
@@ -494,13 +557,23 @@ async function renderEditor(options = {}) {
       return;
     }
 
-    const result = await savePost(articleForSupabase(nextArticle), session.access_token);
+    const result = await savePostWithSession(articleForSupabase(nextArticle), session);
+    if (result.session) {
+      saveSession(result.session);
+    }
+
     if (result.ok && result.post) {
       setCurrentArticle(result.post);
       await renderEditor({
         selectedSlug: result.post.slug,
         statusText: await saveSuccessMessage(result)
       });
+      return;
+    }
+
+    if (result.reason === 'missing-refresh-token' || result.reason.startsWith('refresh-')) {
+      clearSession();
+      renderLogin('login expired. login again.');
       return;
     }
 

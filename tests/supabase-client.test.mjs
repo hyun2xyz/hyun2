@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { savePost } from '../src/supabase-client.js';
+import { refreshSession, savePost, savePostWithSession } from '../src/supabase-client.js';
 
 const article = {
   id: '4d6d6594-0b48-4301-bac3-1965b3b38aa5',
@@ -85,4 +85,80 @@ test('savePost refreshes published_at when saving published writing', async () =
 
   assert.notEqual(payload.published_at, article.published_at);
   assert.ok(Date.parse(payload.published_at));
+});
+
+test('refreshSession calls the Supabase refresh token endpoint', async () => {
+  let request;
+
+  const result = await refreshSession('refresh-token', async (url, options) => {
+    request = {
+      url: String(url),
+      method: options.method,
+      body: JSON.parse(options.body)
+    };
+
+    return new Response(JSON.stringify({
+      access_token: 'fresh-access-token',
+      refresh_token: 'fresh-refresh-token',
+      expires_in: 3600,
+      token_type: 'bearer',
+      user: { id: 'user-1' }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.session.access_token, 'fresh-access-token');
+  assert.match(request.url, /\/auth\/v1\/token\?grant_type=refresh_token$/);
+  assert.equal(request.method, 'POST');
+  assert.deepEqual(request.body, { refresh_token: 'refresh-token' });
+});
+
+test('savePostWithSession refreshes an expired token and retries the save', async () => {
+  const calls = [];
+  const result = await savePostWithSession(article, {
+    access_token: 'expired-access-token',
+    refresh_token: 'refresh-token'
+  }, async (url, options) => {
+    calls.push({
+      url: String(url),
+      method: options.method,
+      auth: options.headers.Authorization,
+      body: JSON.parse(options.body)
+    });
+
+    if (calls.length === 1) {
+      return new Response(JSON.stringify({ message: 'JWT expired' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (calls.length === 2) {
+      return new Response(JSON.stringify({
+        access_token: 'fresh-access-token',
+        refresh_token: 'fresh-refresh-token',
+        expires_in: 3600,
+        token_type: 'bearer',
+        user: { id: 'user-1' }
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    return new Response(JSON.stringify([{ ...article, id: 'saved-id' }]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, 'saved-after-refresh');
+  assert.equal(result.session.access_token, 'fresh-access-token');
+  assert.equal(calls.length, 3);
+  assert.match(calls[1].url, /grant_type=refresh_token/);
+  assert.equal(calls[2].auth, 'Bearer fresh-access-token');
 });

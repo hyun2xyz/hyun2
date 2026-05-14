@@ -2,6 +2,7 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase-config.js';
 
 const POSTS_ENDPOINT = `${SUPABASE_URL}/rest/v1/posts`;
 const AUTH_TOKEN_ENDPOINT = `${SUPABASE_URL}/auth/v1/token?grant_type=password`;
+const AUTH_REFRESH_ENDPOINT = `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`;
 const PUBLISHED_STATUS_QUERY = 'status=eq.published';
 const upsertPreferHeader = 'resolution=merge-duplicates,return=representation';
 const POST_SELECT = 'id,author_id,title,slug,content,excerpt,status,published_at,updated_at';
@@ -54,6 +55,18 @@ function payloadForPost(post, slug = post.slug) {
 
 function rowFromResponse(rows) {
   return Array.isArray(rows) ? rows[0] : rows;
+}
+
+function normalizeSessionPayload(payload) {
+  const expiresIn = Number(payload.expires_in);
+  const expiresAt = Number(payload.expires_at);
+
+  return {
+    ...payload,
+    expires_at: Number.isFinite(expiresAt)
+      ? expiresAt
+      : Math.floor(Date.now() / 1000) + (Number.isFinite(expiresIn) ? expiresIn : 3600)
+  };
 }
 
 async function writePost(post, accessToken, fetchImpl, options = {}) {
@@ -193,7 +206,31 @@ export async function signInWithPassword(email, password, fetchImpl = fetch) {
     };
   }
 
-  return { ok: true, reason: 'signed-in', session: payload };
+  return { ok: true, reason: 'signed-in', session: normalizeSessionPayload(payload) };
+}
+
+export async function refreshSession(refreshToken, fetchImpl = fetch) {
+  if (!hasSupabaseConfig() || !refreshToken) {
+    return { ok: false, reason: 'missing-refresh-token', session: null };
+  }
+
+  const response = await fetchImpl(AUTH_REFRESH_ENDPOINT, {
+    method: 'POST',
+    headers: publicHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ refresh_token: refreshToken })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      reason: payload.error_description ?? payload.msg ?? `http-${response.status}`,
+      session: null
+    };
+  }
+
+  return { ok: true, reason: 'refreshed', session: normalizeSessionPayload(payload) };
 }
 
 export async function getEditablePost(userId, accessToken, fetchImpl = fetch) {
@@ -239,4 +276,31 @@ export async function savePost(post, accessToken, fetchImpl = fetch) {
   }
 
   return { ok: true, reason: 'saved', post: result.post };
+}
+
+export async function savePostWithSession(post, session, fetchImpl = fetch) {
+  if (!session?.access_token) {
+    return { ok: false, reason: 'missing-session', post: null, session: null };
+  }
+
+  let result = await savePost(post, session.access_token, fetchImpl);
+  if (result.ok || result.reason !== 'http-401') {
+    return { ...result, session };
+  }
+
+  if (!session.refresh_token) {
+    return { ok: false, reason: 'missing-refresh-token', post: null, session: null };
+  }
+
+  const refreshed = await refreshSession(session.refresh_token, fetchImpl);
+  if (!refreshed.ok) {
+    return { ok: false, reason: `refresh-${refreshed.reason}`, post: null, session: null };
+  }
+
+  result = await savePost(post, refreshed.session.access_token, fetchImpl);
+  return {
+    ...result,
+    reason: result.ok && result.reason === 'saved' ? 'saved-after-refresh' : result.reason,
+    session: refreshed.session
+  };
 }
