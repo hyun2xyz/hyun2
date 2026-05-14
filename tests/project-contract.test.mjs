@@ -14,7 +14,8 @@ test('home page renders a centered writing draft', async () => {
   const app = await file('src/app.js');
 
   assert.match(html, /id="article-root"/);
-  assert.match(css, /place-items:\s*center/);
+  assert.match(css, /background:\s*#fff/);
+  assert.match(css, /color:\s*#000/);
   assert.match(app, /가안:/);
   assert.match(app, /renderArticle/);
 });
@@ -29,6 +30,19 @@ test('Supabase client is wired to the target project without secret keys', async
   assert.match(client, /status=eq\.published/);
 });
 
+test('edit mode can sign in and save writing from the web page', async () => {
+  const app = await file('src/app.js');
+  const client = await file('src/supabase-client.js');
+
+  assert.match(app, /URLSearchParams\(window\.location\.search\)\.has\('edit'\)/);
+  assert.match(app, /contenteditable="true"/);
+  assert.match(app, /data-action="save"/);
+  assert.match(app, /localStorage/);
+  assert.match(client, /\/auth\/v1\/token\?grant_type=password/);
+  assert.match(client, /savePost/);
+  assert.match(client, /upsert/);
+});
+
 test('database schema enables RLS and public readers only see published posts', async () => {
   const schema = await file('supabase/schema.sql');
 
@@ -37,6 +51,7 @@ test('database schema enables RLS and public readers only see published posts', 
   assert.match(schema, /to anon/i);
   assert.match(schema, /status = 'published'/i);
   assert.match(schema, /auth\.uid\(\)/i);
+  assert.match(schema, /set_post_updated_at/i);
 });
 
 test('GitHub push can deploy the static site through Pages actions', async () => {

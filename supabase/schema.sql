@@ -15,6 +15,21 @@ create table if not exists public.posts (
 
 alter table public.posts enable row level security;
 
+create or replace function public.set_post_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_post_updated_at on public.posts;
+create trigger set_post_updated_at
+before update on public.posts
+for each row execute function public.set_post_updated_at();
+
 drop policy if exists "published posts are readable by anyone" on public.posts;
 create policy "published posts are readable by anyone"
 on public.posts
