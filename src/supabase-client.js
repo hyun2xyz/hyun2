@@ -29,6 +29,76 @@ function authHeaders(accessToken, extra = {}) {
   };
 }
 
+function uniqueSlug(slug) {
+  const safeSlug = String(slug || 'post')
+    .trim()
+    .replace(/-+$/g, '') || 'post';
+  const suffix = new Date().toISOString()
+    .replace(/\D/g, '')
+    .slice(0, 14);
+
+  return `${safeSlug}-${suffix}`;
+}
+
+function payloadForPost(post, slug = post.slug) {
+  return {
+    title: post.title,
+    slug,
+    author_id: post.author_id,
+    excerpt: post.excerpt,
+    content: post.content,
+    status: post.status,
+    published_at: post.status === 'published' ? new Date().toISOString() : null
+  };
+}
+
+function rowFromResponse(rows) {
+  return Array.isArray(rows) ? rows[0] : rows;
+}
+
+async function writePost(post, accessToken, fetchImpl, options = {}) {
+  const method = post.id && !options.forceInsert ? 'PATCH' : 'POST';
+  const payload = payloadForPost(post, options.slug ?? post.slug);
+  const url = new URL(POSTS_ENDPOINT);
+
+  if (method === 'PATCH') {
+    url.searchParams.set('id', `eq.${post.id}`);
+  } else {
+    url.searchParams.set('on_conflict', 'slug');
+  }
+
+  const response = await fetchImpl(url, {
+    method,
+    headers: authHeaders(accessToken, {
+      'Content-Type': 'application/json',
+      Prefer: method === 'POST'
+        ? upsertPreferHeader
+        : 'return=representation'
+    }),
+    body: JSON.stringify(method === 'POST' ? [payload] : payload)
+  });
+
+  const rows = await response.json().catch(() => []);
+  return { method, response, rows, post: rowFromResponse(rows) };
+}
+
+async function cloneLockedPost(post, accessToken, fetchImpl) {
+  const result = await writePost(post, accessToken, fetchImpl, {
+    forceInsert: true,
+    slug: uniqueSlug(post.slug)
+  });
+
+  if (!result.response.ok) {
+    return { ok: false, reason: `http-${result.response.status}`, post: null };
+  }
+
+  if (!result.post) {
+    return { ok: false, reason: 'no-returned-row', post: null };
+  }
+
+  return { ok: true, reason: 'saved-as-new-row', post: result.post };
+}
+
 export async function getLatestPublishedPost(fetchImpl = fetch) {
   if (!hasSupabaseConfig()) {
     return { ok: false, reason: 'missing-config', post: null };
@@ -154,47 +224,19 @@ export async function savePost(post, accessToken, fetchImpl = fetch) {
     return { ok: false, reason: 'missing-session', post: null };
   }
 
-  const payload = {
-    title: post.title,
-    slug: post.slug,
-    author_id: post.author_id,
-    excerpt: post.excerpt,
-    content: post.content,
-    status: post.status,
-    published_at: post.status === 'published' ? post.published_at ?? new Date().toISOString() : null
-  };
+  const result = await writePost(post, accessToken, fetchImpl);
 
-  const url = new URL(POSTS_ENDPOINT);
-  let method = 'POST';
-
-  if (post.id) {
-    method = 'PATCH';
-    url.searchParams.set('id', `eq.${post.id}`);
-  } else {
-    url.searchParams.set('on_conflict', 'slug');
+  if (!result.response.ok) {
+    return { ok: false, reason: `http-${result.response.status}`, post: null };
   }
 
-  const response = await fetchImpl(url, {
-    method,
-    headers: authHeaders(accessToken, {
-      'Content-Type': 'application/json',
-      Prefer: method === 'POST'
-        ? upsertPreferHeader
-        : 'return=representation'
-    }),
-    body: JSON.stringify(method === 'POST' ? [payload] : payload)
-  });
-
-  const rows = await response.json().catch(() => []);
-
-  if (!response.ok) {
-    return { ok: false, reason: `http-${response.status}`, post: null };
+  if (!result.post && result.method === 'PATCH') {
+    return cloneLockedPost(post, accessToken, fetchImpl);
   }
 
-  const savedPost = Array.isArray(rows) ? rows[0] : rows;
-  if (!savedPost) {
+  if (!result.post) {
     return { ok: false, reason: 'no-returned-row', post: null };
   }
 
-  return { ok: true, reason: 'saved', post: savedPost };
+  return { ok: true, reason: 'saved', post: result.post };
 }

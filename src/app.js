@@ -317,6 +317,21 @@ function saveFailureMessage(reason) {
   return reason;
 }
 
+async function saveSuccessMessage(result) {
+  if (result.post.status !== 'published') {
+    return 'saved as draft. turn on publish for readers.';
+  }
+
+  const publicResult = await getPostBySlug(result.post.slug);
+  if (publicResult.ok && publicResult.post) {
+    return result.reason === 'saved-as-new-row'
+      ? 'saved to Supabase as a fresh public copy. reader is updated.'
+      : 'saved to Supabase. reader is updated.';
+  }
+
+  return 'saved to Supabase, but reader cannot see it yet. keep publish checked.';
+}
+
 function renderAdminIndex(posts, selectedSlug) {
   if (!posts.length) {
     return '<p class="empty-state">아직 저장된 제목이 없습니다.</p>';
@@ -478,7 +493,10 @@ async function renderEditor(options = {}) {
     const result = await savePost(articleForSupabase(nextArticle), session.access_token);
     if (result.ok && result.post) {
       setCurrentArticle(result.post);
-      await renderEditor({ selectedSlug: result.post.slug, statusText: 'saved to Supabase.' });
+      await renderEditor({
+        selectedSlug: result.post.slug,
+        statusText: await saveSuccessMessage(result)
+      });
       return;
     }
 
