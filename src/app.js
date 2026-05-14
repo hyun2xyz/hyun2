@@ -7,15 +7,17 @@ import {
   refreshSession,
   savePostWithSession,
   signInWithPassword
-} from './supabase-client.js?v=20260514-2145';
+} from './supabase-client.js?v=20260514-2205';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
+const THEME_KEY = 'hyun2.theme';
 const TYPE_SETTINGS_KEY = 'hyun2.typeSettings';
 const DEFAULT_TYPE_SETTINGS = {
   titleSizePt: 44,
   bodySizePt: 20,
-  bodyLineHeight: 1.85
+  bodyLineHeight: 1.85,
+  indentPt: 0
 };
 
 const fallbackArticle = {
@@ -74,12 +76,49 @@ function clampLineHeight(value, fallback) {
   return Math.min(3, Math.max(1, next));
 }
 
+function clampIndentPt(value, fallback) {
+  const next = Number.parseFloat(value);
+  if (!Number.isFinite(next)) return fallback;
+  return Math.min(120, Math.max(0, next));
+}
+
 function normalizeTypeSettings(settings = {}) {
   return {
     titleSizePt: clampPt(settings.titleSizePt, DEFAULT_TYPE_SETTINGS.titleSizePt),
     bodySizePt: clampPt(settings.bodySizePt, DEFAULT_TYPE_SETTINGS.bodySizePt),
-    bodyLineHeight: clampLineHeight(settings.bodyLineHeight, DEFAULT_TYPE_SETTINGS.bodyLineHeight)
+    bodyLineHeight: clampLineHeight(settings.bodyLineHeight, DEFAULT_TYPE_SETTINGS.bodyLineHeight),
+    indentPt: clampIndentPt(settings.indentPt, DEFAULT_TYPE_SETTINGS.indentPt)
   };
+}
+
+function blocksFromText(body) {
+  return splitParagraphs(body).map((text) => ({ type: 'text', text }));
+}
+
+function normalizeBlocks(blocks, fallbackBody = '') {
+  if (!Array.isArray(blocks)) return blocksFromText(fallbackBody);
+
+  return blocks
+    .map((block) => {
+      if (block?.type === 'image' && block.src) {
+        return {
+          type: 'image',
+          src: String(block.src),
+          alt: String(block.alt ?? '')
+        };
+      }
+
+      const text = String(block?.text ?? '').trim();
+      return text ? { type: 'text', text } : null;
+    })
+    .filter(Boolean);
+}
+
+function textFromBlocks(blocks) {
+  return normalizeBlocks(blocks)
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n\n');
 }
 
 function decodeContent(content) {
@@ -88,8 +127,11 @@ function decodeContent(content) {
   try {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object' && typeof parsed.body === 'string') {
+      const blocks = normalizeBlocks(parsed.blocks, parsed.body);
+
       return {
         body: parsed.body,
+        blocks,
         style: normalizeTypeSettings(parsed.style)
       };
     }
@@ -99,13 +141,17 @@ function decodeContent(content) {
 
   return {
     body: raw,
+    blocks: blocksFromText(raw),
     style: normalizeTypeSettings()
   };
 }
 
-function encodeContent(body, style) {
+function encodeContent(body, style, blocks = null) {
+  const normalizedBlocks = normalizeBlocks(blocks, body);
+
   return JSON.stringify({
     body: String(body ?? ''),
+    blocks: normalizedBlocks,
     style: normalizeTypeSettings(style)
   }, null, 2);
 }
@@ -152,6 +198,35 @@ function saveSession(session) {
 
 function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+}
+
+function currentTheme() {
+  const theme = document.documentElement.dataset.theme;
+  if (theme === 'dark' || theme === 'light') return theme;
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem(THEME_KEY, theme);
+}
+
+function toggleTheme() {
+  setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+  document.querySelectorAll('[data-action="theme"]').forEach((button) => {
+    button.textContent = themeButtonLabel();
+  });
+}
+
+function themeButtonLabel() {
+  return currentTheme() === 'dark' ? 'light' : 'dark';
+}
+
+function attachThemeToggle(root = document) {
+  root.querySelectorAll('[data-action="theme"]').forEach((button) => {
+    button.textContent = themeButtonLabel();
+    button.addEventListener('click', toggleTheme);
+  });
 }
 
 function decodeBase64Url(value) {
@@ -210,10 +285,12 @@ function normalizeArticle(article = fallbackArticle) {
   const merged = { ...fallbackArticle, ...article };
   const decoded = decodeContent(merged.content);
   const style = normalizeTypeSettings(merged.style ?? decoded.style ?? loadTypeSettings());
+  const blocks = normalizeBlocks(merged.blocks ?? decoded.blocks, decoded.body);
 
   return {
     ...merged,
     content: decoded.body,
+    blocks,
     style
   };
 }
@@ -233,16 +310,46 @@ function applyTypeStyle(container, settings) {
   container.style.setProperty('--body-size', `${style.bodySizePt}pt`);
   container.style.setProperty('--body-line-height', style.bodyLineHeight);
   container.style.setProperty('--paragraph-gap', `${paragraphGap}em`);
+  container.style.setProperty('--paragraph-indent', `${style.indentPt}pt`);
 }
 
-function articleMarkup(article) {
+function formatDate(value) {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
+
+function imageBlockMarkup(block) {
+  return `
+    <figure class="article-image" data-block-type="image" contenteditable="false">
+      <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}">
+    </figure>
+  `;
+}
+
+function blockMarkup(block) {
+  if (block.type === 'image') return imageBlockMarkup(block);
+  return `<p>${escapeHtml(block.text)}</p>`;
+}
+
+function articleMarkup(article, options = {}) {
   const view = normalizeArticle(article);
-  const paragraphs = splitParagraphs(view.content);
+  const date = formatDate(view.published_at ?? view.updated_at);
+  const blocks = view.blocks.length ? view.blocks : blocksFromText(view.content);
 
   return `
     <h1 class="article__title">${escapeHtml(view.title)}</h1>
+    ${date ? `<time class="article__date" datetime="${escapeHtml(view.published_at ?? view.updated_at)}">${escapeHtml(date)}</time>` : ''}
     <div class="article__body">
-      ${paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('')}
+      ${blocks.map(blockMarkup).join('')}
+      ${options.editable && !blocks.length ? '<p><br></p>' : ''}
     </div>
   `;
 }
@@ -259,7 +366,10 @@ function renderReaderIndex(posts, selectedSlug) {
 
   return `
     <aside class="reader-index" data-panel="index" aria-label="글 목차">
-      <div class="index-title">index</div>
+      <div class="index-title">
+        <span>index</span>
+        <button class="theme-button" type="button" data-action="theme">${themeButtonLabel()}</button>
+      </div>
       <nav>
         ${posts.map((post) => `
           <a class="${post.slug === selectedSlug ? 'is-selected' : ''}" href="./?post=${encodeURIComponent(post.slug)}">
@@ -295,6 +405,7 @@ function renderReader(article, posts = []) {
       </article>
     </div>
   `;
+  attachThemeToggle(root);
 }
 
 function renderLogin(statusText = '') {
@@ -337,15 +448,42 @@ function readTypeSettingsFromDom(article) {
   return normalizeTypeSettings({
     titleSizePt: document.querySelector('[name="titleSizePt"]')?.value ?? article.style?.titleSizePt,
     bodySizePt: document.querySelector('[name="bodySizePt"]')?.value ?? article.style?.bodySizePt,
-    bodyLineHeight: document.querySelector('[name="bodyLineHeight"]')?.value ?? article.style?.bodyLineHeight
+    bodyLineHeight: document.querySelector('[name="bodyLineHeight"]')?.value ?? article.style?.bodyLineHeight,
+    indentPt: document.querySelector('[name="indentPt"]')?.value ?? article.style?.indentPt
   });
+}
+
+function editorBlocksFromDom() {
+  const contentRoot = document.querySelector('[data-field="content"]');
+  if (!contentRoot) return [];
+
+  return Array.from(contentRoot.childNodes)
+    .map((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent.trim();
+        return text ? { type: 'text', text } : null;
+      }
+
+      if (!(node instanceof HTMLElement)) return null;
+
+      if (node.matches('[data-block-type="image"]')) {
+        const image = node.querySelector('img');
+        return image?.src ? { type: 'image', src: image.src, alt: image.alt } : null;
+      }
+
+      const text = node.innerText.trim();
+      return text ? { type: 'text', text } : null;
+    })
+    .filter(Boolean);
 }
 
 function editorArticleFromDom(article, session = null) {
   const title = document.querySelector('[data-field="title"]').innerText.trim();
-  const content = document.querySelector('[data-field="content"]').innerText.trim();
+  const blocks = editorBlocksFromDom();
+  const content = textFromBlocks(blocks).trim();
   const style = readTypeSettingsFromDom(article);
-  const paragraphs = splitParagraphs(content);
+  const textBlocks = blocks.filter((block) => block.type === 'text');
+  const body = content || (blocks.some((block) => block.type === 'image') ? '' : fallbackArticle.content);
   const publishedAt = new Date().toISOString();
 
   return normalizeArticle({
@@ -353,8 +491,9 @@ function editorArticleFromDom(article, session = null) {
     title: title || '제목 없는 글',
     slug: article.id ? article.slug : article.slug || slugify(title),
     author_id: article.author_id ?? session?.user?.id,
-    excerpt: paragraphs[0]?.slice(0, 90) ?? 'Hyun2',
-    content: content || fallbackArticle.content,
+    excerpt: textBlocks[0]?.text.slice(0, 90) ?? 'Hyun2',
+    content: body,
+    blocks: blocks.length ? blocks : blocksFromText(body),
     style,
     status: 'published',
     published_at: publishedAt
@@ -365,8 +504,95 @@ function articleForSupabase(article) {
   const next = normalizeArticle(article);
   return {
     ...next,
-    content: encodeContent(next.content, next.style)
+    content: encodeContent(next.content, next.style, next.blocks)
   };
+}
+
+function imageFilesFromDataTransfer(dataTransfer) {
+  return Array.from(dataTransfer?.files ?? [])
+    .filter((file) => file.type.startsWith('image/'));
+}
+
+function dataUrlFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => resolve(String(reader.result)));
+    reader.addEventListener('error', () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
+}
+
+function imageFigureFromFile(src, file) {
+  const figure = document.createElement('figure');
+  figure.className = 'article-image';
+  figure.dataset.blockType = 'image';
+  figure.contentEditable = 'false';
+
+  const image = document.createElement('img');
+  image.src = src;
+  image.alt = file.name || 'uploaded image';
+  figure.append(image);
+
+  return figure;
+}
+
+function dropReferenceBlock(contentRoot, event) {
+  return document.elementsFromPoint(event.clientX, event.clientY)
+    .find((element) => element.parentElement === contentRoot
+      && (element.matches('p') || element.matches('[data-block-type="image"]')));
+}
+
+function insertImageNode(contentRoot, figure, event = null) {
+  const reference = event ? dropReferenceBlock(contentRoot, event) : null;
+  if (!reference) {
+    contentRoot.append(figure);
+  } else {
+    const rect = reference.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+    contentRoot.insertBefore(figure, before ? reference : reference.nextSibling);
+  }
+
+  const paragraph = document.createElement('p');
+  paragraph.append(document.createElement('br'));
+  contentRoot.insertBefore(paragraph, figure.nextSibling);
+}
+
+async function insertImageFiles(files, contentRoot, event = null) {
+  for (const file of files) {
+    const src = await dataUrlFromFile(file);
+    insertImageNode(contentRoot, imageFigureFromFile(src, file), event);
+  }
+}
+
+function attachImageDrop(contentRoot, statusRoot) {
+  contentRoot.addEventListener('dragover', (event) => {
+    if (!imageFilesFromDataTransfer(event.dataTransfer).length) return;
+    event.preventDefault();
+    contentRoot.classList.add('is-dragging');
+  });
+
+  contentRoot.addEventListener('dragleave', () => {
+    contentRoot.classList.remove('is-dragging');
+  });
+
+  contentRoot.addEventListener('drop', async (event) => {
+    const files = imageFilesFromDataTransfer(event.dataTransfer);
+    if (!files.length) return;
+
+    event.preventDefault();
+    contentRoot.classList.remove('is-dragging');
+    await insertImageFiles(files, contentRoot, event);
+    statusRoot.textContent = 'image added. save to publish.';
+  });
+
+  contentRoot.addEventListener('paste', async (event) => {
+    const files = imageFilesFromDataTransfer(event.clipboardData);
+    if (!files.length) return;
+
+    event.preventDefault();
+    await insertImageFiles(files, contentRoot);
+    statusRoot.textContent = 'image added. save to publish.';
+  });
 }
 
 function saveFailureMessage(reason) {
@@ -488,6 +714,7 @@ async function renderEditor(options = {}) {
         <div class="editor__bar">
           <button type="button" data-action="save">save</button>
           <a href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
+          <button type="button" data-action="theme">${themeButtonLabel()}</button>
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
         </div>
 
@@ -504,16 +731,23 @@ async function renderEditor(options = {}) {
             line
             <span><input name="bodyLineHeight" type="number" min="1" max="3" step="0.05" value="${style.bodyLineHeight}"></span>
           </label>
+          <label>
+            indent
+            <span><input name="indentPt" type="number" min="0" max="120" step="1" value="${style.indentPt}"> pt</span>
+          </label>
         </div>
 
         <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(article.title)}</h1>
-        <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${splitParagraphs(article.content).map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('')}</div>
+        <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${normalizeArticle(article).blocks.map(blockMarkup).join('') || '<p><br></p>'}</div>
         <p class="editor__status">${escapeHtml(options.statusText ?? '')}</p>
       </section>
     </div>
   `;
 
-  root.querySelectorAll('[name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"]').forEach((input) => {
+  attachThemeToggle(root);
+  attachImageDrop(root.querySelector('[data-field="content"]'), root.querySelector('.editor__status'));
+
+  root.querySelectorAll('[name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"]').forEach((input) => {
     input.addEventListener('input', () => {
       const nextStyle = readTypeSettingsFromDom(currentArticle());
       saveTypeSettings(nextStyle);
@@ -592,18 +826,16 @@ async function renderPublicPage() {
   let article = local;
   let posts = local.slug ? [{ title: local.title, slug: local.slug, status: local.status }] : [];
 
-  renderArticle(local);
-
-  const postResult = requestedSlug
-    ? await getPostBySlug(requestedSlug)
-    : await getLatestPublishedPost();
+  const [postResult, titleResult] = await Promise.all([
+    requestedSlug ? getPostBySlug(requestedSlug) : getLatestPublishedPost(),
+    listPostTitles()
+  ]);
 
   if (postResult.ok && postResult.post) {
     article = normalizeArticle(postResult.post);
     setCurrentArticle(article);
   }
 
-  const titleResult = await listPostTitles();
   if (titleResult.ok) {
     posts = dedupePostTitles(titleResult.posts);
   }

@@ -16,11 +16,15 @@ test('home page renders a centered writing draft', async () => {
   assert.match(html, /id="article-root"/);
   assert.doesNotMatch(html, /data-admin/);
   assert.match(html, /src="\.\/src\/app\.js\?v=/);
-  assert.match(css, /background:\s*#fff/);
-  assert.match(css, /color:\s*#000/);
+  assert.match(css, /--bg:\s*#fff/);
+  assert.match(css, /--fg:\s*#000/);
+  assert.match(html, /Gowun\+Batang/);
   assert.match(app, /가안:/);
   assert.match(app, /renderArticle/);
+  assert.match(app, /article__date/);
+  assert.match(app, /formatDate/);
   assert.doesNotMatch(app, /article__meta/);
+  assert.doesNotMatch(app, /renderArticle\(local\)/);
 });
 
 test('Supabase client is wired to the target project without secret keys', async () => {
@@ -49,10 +53,16 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /name="titleSizePt"/);
   assert.match(app, /name="bodySizePt"/);
   assert.match(app, /name="bodyLineHeight"/);
+  assert.match(app, /name="indentPt"/);
   assert.match(app, /bodyLineHeight/);
+  assert.match(app, /indentPt/);
   assert.match(app, /pt/);
   assert.match(app, /contenteditable="true"/);
+  assert.match(app, /insertImageFiles/);
+  assert.match(app, /data-block-type="image"/);
+  assert.match(app, /FileReader/);
   assert.match(app, /data-action="save"/);
+  assert.match(app, /data-action="theme"/);
   assert.match(app, /savePostWithSession/);
   assert.match(app, /refreshSessionIfNeeded/);
   assert.doesNotMatch(app, /data-field="status"/);
@@ -70,6 +80,11 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /dedupePostTitles/);
   assert.match(css, /--body-line-height/);
   assert.match(css, /--paragraph-gap/);
+  assert.match(css, /--paragraph-indent/);
+  assert.match(css, /hyphens:\s*auto/);
+  assert.match(css, /data-theme="dark"/);
+  assert.match(css, /#0645ff|#06f|blue/i);
+  assert.match(css, /Gowun Batang/);
   assert.match(app, /--paragraph-gap/);
   assert.doesNotMatch(app, /supabase ready/);
 });
