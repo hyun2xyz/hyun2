@@ -249,16 +249,6 @@ input {
   margin-top: 24px;
 }
 
-.status-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.status-toggle input {
-  width: auto;
-}
-
 @media (max-width: 520px) {
   .site-shell {
     padding-top: 42px;

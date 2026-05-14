@@ -6,7 +6,7 @@ import {
   listPostTitles,
   savePost,
   signInWithPassword
-} from './supabase-client.js?v=20260514-2030';
+} from './supabase-client.js?v=20260514-2105';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
@@ -291,9 +291,9 @@ function readTypeSettingsFromDom(article) {
 function editorArticleFromDom(article, session = null) {
   const title = document.querySelector('[data-field="title"]').innerText.trim();
   const content = document.querySelector('[data-field="content"]').innerText.trim();
-  const status = document.querySelector('[data-field="status"]').checked ? 'published' : 'draft';
   const style = readTypeSettingsFromDom(article);
   const paragraphs = splitParagraphs(content);
+  const publishedAt = new Date().toISOString();
 
   return normalizeArticle({
     ...article,
@@ -303,8 +303,8 @@ function editorArticleFromDom(article, session = null) {
     excerpt: paragraphs[0]?.slice(0, 90) ?? 'Hyun2',
     content: content || fallbackArticle.content,
     style,
-    status,
-    published_at: status === 'published' ? article.published_at ?? new Date().toISOString() : null
+    status: 'published',
+    published_at: publishedAt
   });
 }
 
@@ -329,10 +329,6 @@ function saveFailureMessage(reason) {
 }
 
 async function saveSuccessMessage(result) {
-  if (result.post.status !== 'published') {
-    return 'saved as draft. turn on publish for readers.';
-  }
-
   const publicResult = await getPostBySlug(result.post.slug);
   if (publicResult.ok && publicResult.post) {
     return result.reason === 'saved-as-new-row'
@@ -340,7 +336,7 @@ async function saveSuccessMessage(result) {
       : 'saved to Supabase. reader is updated.';
   }
 
-  return 'saved to Supabase, but reader cannot see it yet. keep publish checked.';
+  return 'saved to Supabase, but public read failed. check RLS/public read policy.';
 }
 
 function renderAdminIndex(posts, selectedSlug) {
@@ -427,10 +423,6 @@ async function renderEditor(options = {}) {
 
       <section class="editor" data-panel="editor">
         <div class="editor__bar">
-          <label class="status-toggle">
-            <input data-field="status" type="checkbox" ${article.status === 'published' ? 'checked' : ''}>
-            publish
-          </label>
           <button type="button" data-action="save">save</button>
           <a href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
@@ -474,6 +466,7 @@ async function renderEditor(options = {}) {
   });
 
   root.querySelector('[data-action="new"]').addEventListener('click', async () => {
+    const now = new Date().toISOString();
     const draft = normalizeArticle({
       id: null,
       author_id: session?.user?.id,
@@ -481,14 +474,14 @@ async function renderEditor(options = {}) {
       slug: '',
       excerpt: 'Hyun2',
       content: '',
-      status: 'draft',
-      published_at: null,
-      updated_at: new Date().toISOString(),
+      status: 'published',
+      published_at: now,
+      updated_at: now,
       style: loadTypeSettings(style)
     });
 
     setCurrentArticle(draft);
-    await renderEditor({ article: draft, statusText: 'new draft' });
+    await renderEditor({ article: draft, statusText: 'new writing' });
   });
 
   root.querySelector('[data-action="save"]').addEventListener('click', async () => {
