@@ -7,7 +7,7 @@ import {
   refreshSession,
   savePostWithSession,
   signInWithPassword
-} from './supabase-client.js?v=20260516-polish-tools';
+} from './supabase-client.js?v=20260516-publish-trash';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
@@ -311,6 +311,10 @@ function setLang(lang) {
   updateTopControls();
 }
 
+function toggleLang() {
+  setLang(currentLang() === 'en' ? 'ko' : 'en');
+}
+
 function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem(THEME_KEY, theme);
@@ -335,21 +339,18 @@ function themeLabel(theme, lang = currentLang()) {
 }
 
 function updateTopControls(root = document) {
-  root.querySelectorAll('[data-action="lang"]').forEach((button) => {
-    const active = button.dataset.lang === currentLang();
-    button.classList.toggle('is-active', active);
-    button.setAttribute('aria-pressed', String(active));
+  root.querySelectorAll('[data-action="lang-toggle"]').forEach((button) => {
+    button.textContent = currentLang() === 'en' ? 'EN' : '한';
+    button.setAttribute('aria-label', currentLang() === 'en' ? 'English' : '한국어');
+  });
+
+  root.querySelectorAll('[data-action="theme-toggle"]').forEach((button) => {
+    button.textContent = themeLabel(currentTheme());
+    button.setAttribute('aria-label', currentTheme() === 'dark' ? 'dark' : 'light');
   });
 
   root.querySelectorAll('[data-action="theme"]').forEach((button) => {
-    if (button.dataset.theme) {
-      const active = button.dataset.theme === currentTheme();
-      button.textContent = themeLabel(button.dataset.theme);
-      button.classList.toggle('is-active', active);
-      button.setAttribute('aria-pressed', String(active));
-    } else {
-      button.textContent = themeButtonLabel();
-    }
+    button.textContent = themeButtonLabel();
   });
 }
 
@@ -367,8 +368,11 @@ function attachThemeToggle(root = document) {
 }
 
 function attachLangToggle(root = document) {
-  root.querySelectorAll('[data-action="lang"]').forEach((button) => {
-    button.addEventListener('click', () => setLang(button.dataset.lang));
+  root.querySelectorAll('[data-action="lang-toggle"]').forEach((button) => {
+    button.addEventListener('click', toggleLang);
+  });
+  root.querySelectorAll('[data-action="theme-toggle"]').forEach((button) => {
+    button.addEventListener('click', toggleTheme);
   });
   updateTopControls(root);
 }
@@ -513,10 +517,9 @@ function renderReaderIndex(posts, selectedSlug) {
   if (!posts.length) return '';
 
   return `
-    <aside class="reader-index" data-panel="index" aria-label="글 목차">
+    <aside class="reader-index reader-chrome" data-panel="index" aria-label="글 목차">
       <div class="index-title">
         <a class="index-heading" href="./?index">index</a>
-        <button class="theme-button" type="button" data-action="theme" hidden>${themeButtonLabel()}</button>
       </div>
       <nav>
         ${posts.map((post) => `
@@ -529,13 +532,11 @@ function renderReaderIndex(posts, selectedSlug) {
   `;
 }
 
-function renderTopControls() {
+function renderTopControls(className = '') {
   return `
-    <div class="top-controls" aria-label="언어와 테마">
-      <button type="button" data-action="lang" data-lang="ko" aria-label="한국어">한</button>
-      <button type="button" data-action="lang" data-lang="en" aria-label="English">EN</button>
-      <button type="button" data-action="theme" data-theme="dark" aria-label="dark">${themeLabel('dark')}</button>
-      <button type="button" data-action="theme" data-theme="light" aria-label="light">${themeLabel('light')}</button>
+    <div class="top-controls ${escapeHtml(className)}" aria-label="언어와 테마">
+      <button type="button" data-action="lang-toggle" aria-label="${currentLang() === 'en' ? 'English' : '한국어'}">${currentLang() === 'en' ? 'EN' : '한'}</button>
+      <button type="button" data-action="theme-toggle" aria-label="${currentTheme() === 'dark' ? 'dark' : 'light'}">${themeLabel(currentTheme())}</button>
     </div>
   `;
 }
@@ -576,17 +577,44 @@ function attachNoteDots(root) {
   });
 }
 
+function attachReaderChromeDissolve(root) {
+  const chrome = root.querySelectorAll('.reader-chrome');
+  if (!chrome.length) return;
+
+  let lastY = window.scrollY;
+  let timer = 0;
+
+  const show = () => chrome.forEach((element) => element.classList.remove('is-dissolved'));
+  const hide = () => chrome.forEach((element) => element.classList.add('is-dissolved'));
+
+  window.addEventListener('scroll', () => {
+    window.clearTimeout(timer);
+    const nextY = window.scrollY;
+    if (nextY <= 24 || nextY < lastY) {
+      show();
+    } else if (nextY > 90) {
+      timer = window.setTimeout(hide, 650);
+    }
+    lastY = nextY;
+  }, { passive: true });
+}
+
 function renderIndexPage(posts = []) {
   const root = document.querySelector('#article-root');
 
   root.innerHTML = `
     <section class="index-page" aria-label="전체 목차">
-      <h1>index</h1>
-      <nav>
-        ${posts.map((post) => `
-          <a href="./?post=${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a>
-        `).join('')}
-      </nav>
+      <div class="index-page__inner">
+        <h1>index</h1>
+        <nav class="index-page__list">
+          ${posts.map((post) => `
+            <a class="index-page__row" href="./?post=${encodeURIComponent(post.slug)}">
+              <span>${escapeHtml(post.title)}</span>
+              <time>${escapeHtml(formatDate(post.published_at ?? post.updated_at))}</time>
+            </a>
+          `).join('')}
+        </nav>
+      </div>
     </section>
     ${renderTopControls()}
     ${topButtonMarkup()}
@@ -601,7 +629,7 @@ function dedupePostTitles(posts) {
   const seen = new Set();
 
   return posts.filter((post) => {
-    const key = String(post.title || post.slug).trim().toLowerCase();
+    const key = String(post.slug || post.title).trim().toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -620,13 +648,14 @@ function renderReader(article, posts = []) {
         ${articleMarkup(view)}
       </article>
     </div>
-    ${renderTopControls()}
+    ${renderTopControls('reader-chrome')}
     ${topButtonMarkup()}
   `;
   attachThemeToggle(root);
   attachLangToggle(root);
   attachTopButton(root);
   attachNoteDots(root);
+  attachReaderChromeDissolve(root);
 }
 
 function renderLogin(statusText = '') {
@@ -707,6 +736,10 @@ function editorBlocksFromDom() {
     .filter(Boolean);
 }
 
+function publishEnabled() {
+  return document.querySelector('[data-action="publish"]')?.getAttribute('aria-pressed') === 'true';
+}
+
 function editorArticleFromDom(article, session = null) {
   const title = document.querySelector('[data-field="title"]').innerText.trim();
   const blocks = editorBlocksFromDom();
@@ -714,7 +747,8 @@ function editorArticleFromDom(article, session = null) {
   const style = readTypeSettingsFromDom(article);
   const textBlocks = blocks.filter((block) => block.type === 'text');
   const body = content || (blocks.some((block) => block.type === 'image') ? '' : fallbackArticle.content);
-  const publishedAt = new Date().toISOString();
+  const status = publishEnabled() ? 'published' : 'draft';
+  const publishedAt = status === 'published' ? new Date().toISOString() : null;
 
   return normalizeArticle({
     ...article,
@@ -725,7 +759,7 @@ function editorArticleFromDom(article, session = null) {
     content: body,
     blocks: blocks.length ? blocks : blocksFromText(body),
     style,
-    status: 'published',
+    status,
     published_at: publishedAt
   });
 }
@@ -881,31 +915,6 @@ function insertNoteDot(contentRoot, statusRoot) {
   statusRoot.textContent = 'note dot added. save to publish.';
 }
 
-function selectedParagraphs(contentRoot) {
-  const range = selectionRangeIn(contentRoot);
-  if (!range) return [];
-
-  return Array.from(contentRoot.querySelectorAll('p'))
-    .filter((paragraph) => range.intersectsNode(paragraph));
-}
-
-function applySelectedLineHeight(contentRoot, statusRoot) {
-  const input = document.querySelector('[name="selectedLineHeight"]');
-  const next = normalizeBlockLineHeight(input?.value);
-  const paragraphs = selectedParagraphs(contentRoot);
-
-  if (!next || !paragraphs.length) {
-    statusRoot.textContent = 'drag paragraph text first, then apply line.';
-    return;
-  }
-
-  paragraphs.forEach((paragraph) => {
-    paragraph.style.lineHeight = next;
-    paragraph.dataset.lineHeight = next;
-  });
-  statusRoot.textContent = 'selected paragraph line height applied. save to publish.';
-}
-
 function underlineSelection(contentRoot, statusRoot) {
   const range = selectionRangeIn(contentRoot);
   if (!range || range.collapsed) {
@@ -925,10 +934,6 @@ function attachEditorFormatting(root, contentRoot, statusRoot) {
   root.querySelector('[data-action="note"]')?.addEventListener('click', () => {
     insertNoteDot(contentRoot, statusRoot);
   });
-
-  root.querySelector('[data-action="apply-line"]')?.addEventListener('click', () => {
-    applySelectedLineHeight(contentRoot, statusRoot);
-  });
 }
 
 function saveFailureMessage(reason) {
@@ -944,6 +949,14 @@ function saveFailureMessage(reason) {
 }
 
 async function saveSuccessMessage(result) {
+  if (result.post?.status === 'draft') {
+    return 'saved to Supabase as draft. reader is not updated.';
+  }
+
+  if (result.post?.status === 'archived') {
+    return 'moved to trash.';
+  }
+
   const publicResult = await getPostBySlug(result.post.slug);
   if (publicResult.ok && publicResult.post) {
     return result.reason === 'saved-as-new-row'
@@ -959,14 +972,27 @@ function renderAdminIndex(posts, selectedSlug) {
     return '<p class="empty-state">아직 저장된 제목이 없습니다.</p>';
   }
 
-  return posts.map((post) => `
-    <button
-      class="index-link ${post.slug === selectedSlug ? 'is-selected' : ''}"
-      type="button"
-      data-action="select-post"
-      data-slug="${escapeHtml(post.slug)}"
-    >${escapeHtml(post.title)}</button>
-  `).join('');
+  const activePosts = posts.filter((post) => post.status !== 'archived');
+  const trashPosts = posts.filter((post) => post.status === 'archived');
+  const renderButton = (post) => `
+      <button
+        class="index-link ${post.slug === selectedSlug ? 'is-selected' : ''}"
+        type="button"
+        data-action="select-post"
+        data-slug="${escapeHtml(post.slug)}"
+      >${escapeHtml(post.title)}</button>
+    `;
+
+  return `
+    <section class="admin-index__group">
+      <p>published / draft</p>
+      ${activePosts.length ? activePosts.map(renderButton).join('') : '<span class="empty-state">비어 있습니다.</span>'}
+    </section>
+    <section class="admin-index__group">
+      <p>trash</p>
+      ${trashPosts.length ? trashPosts.map(renderButton).join('') : '<span class="empty-state">비어 있습니다.</span>'}
+    </section>
+  `;
 }
 
 async function loadAdminState(session, options = {}) {
@@ -985,6 +1011,7 @@ async function loadAdminState(session, options = {}) {
     const selectedSlug = options.selectedSlug
       ?? routeParams.get('post')
       ?? article.slug
+      ?? posts.find((post) => post.status !== 'archived')?.slug
       ?? posts[0]?.slug;
 
     if (!options.article && selectedSlug) {
@@ -1049,19 +1076,15 @@ async function renderEditor(options = {}) {
         <div class="editor__bar">
           <button type="button" data-action="new">new</button>
           <button type="button" data-action="save">save</button>
+          <button type="button" data-action="publish" aria-pressed="${article.status === 'published'}">${article.status === 'published' ? 'published' : 'publish'}</button>
           <a class="button-link" href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
-          <button type="button" data-action="theme" hidden>${themeButtonLabel()}</button>
+          <button type="button" data-action="trash">trash</button>
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
         </div>
 
         <div class="editor__tools" data-panel="tools" aria-label="글 수정 도구">
           <button class="tool-button" type="button" data-action="underline" title="선택한 글자에 밑줄">U</button>
-          <button class="tool-button note-tool" type="button" data-action="note" title="선택한 글자 옆에 각주나 링크 점 추가">o</button>
-          <label class="line-tool" title="선택한 단락 행간">
-            line
-            <input name="selectedLineHeight" type="number" min="1" max="3" step="0.05" value="${style.bodyLineHeight}">
-          </label>
-          <button class="tool-button" type="button" data-action="apply-line" title="선택한 단락에 행간 적용">lh</button>
+          <button class="tool-button note-tool" type="button" data-action="note" title="선택한 글자 옆에 파란 주석 표시 추가">ㅇ</button>
         </div>
 
         <div class="editor__settings" data-panel="settings" aria-label="글자 설정">
@@ -1097,6 +1120,13 @@ async function renderEditor(options = {}) {
   attachEditorFormatting(root, contentRoot, statusRoot);
   attachNoteDots(root);
 
+  root.querySelector('[data-action="publish"]').addEventListener('click', (event) => {
+    const button = event.currentTarget;
+    const next = button.getAttribute('aria-pressed') !== 'true';
+    button.setAttribute('aria-pressed', String(next));
+    button.textContent = next ? 'published' : 'publish';
+  });
+
   root.querySelectorAll('[name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"]').forEach((input) => {
     input.addEventListener('input', () => {
       const nextStyle = readTypeSettingsFromDom(currentArticle());
@@ -1121,14 +1151,40 @@ async function renderEditor(options = {}) {
       slug: '',
       excerpt: 'Hyun2',
       content: '',
-      status: 'published',
-      published_at: now,
+      status: 'draft',
+      published_at: null,
       updated_at: now,
       style: loadTypeSettings(style)
     });
 
     setCurrentArticle(draft);
     await renderEditor({ article: draft, statusText: 'new writing' });
+  });
+
+  root.querySelector('[data-action="trash"]').addEventListener('click', async () => {
+    if (!window.confirm('이 페이지를 휴지통으로 보낼까요? 독자 페이지에서는 보이지 않습니다.')) return;
+
+    const archivedArticle = normalizeArticle({
+      ...editorArticleFromDom(article, session),
+      status: 'archived',
+      published_at: null
+    });
+    saveLocalDraft(archivedArticle);
+
+    if (!hasSupabaseConfig() || !session?.access_token) {
+      await renderEditor({ article: archivedArticle, statusText: 'moved to local trash.' });
+      return;
+    }
+
+    const result = await savePostWithSession(articleForSupabase(archivedArticle), session);
+    if (result.session) saveSession(result.session);
+
+    if (result.ok && result.post) {
+      await renderEditor({ selectedSlug: result.post.slug, statusText: await saveSuccessMessage(result) });
+      return;
+    }
+
+    await renderEditor({ statusText: `trash failed: ${saveFailureMessage(result.reason)}` });
   });
 
   root.querySelector('[data-action="save"]').addEventListener('click', async () => {

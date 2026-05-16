@@ -88,10 +88,8 @@ input {
 }
 
 .reader-layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
-  align-items: start;
+  display: block;
+  width: 100%;
 }
 
 .reader-article {
@@ -120,14 +118,14 @@ input {
 
 .reader-index nav,
 .admin-index nav {
-  display: grid;
-  gap: 8px;
+  display: block;
 }
 
 .reader-index a,
 .index-link {
   display: block;
   width: 100%;
+  margin-bottom: 8px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -152,15 +150,6 @@ input {
   margin-bottom: 16px;
 }
 
-.theme-button {
-  padding: 2px 6px;
-}
-
-.theme-button[hidden],
-.editor__bar [data-action="theme"][hidden] {
-  display: none;
-}
-
 .editor__note,
 .editor__status,
 .editor__bar,
@@ -175,6 +164,11 @@ input {
 
 .article__title {
   margin: 0 0 28px;
+  font-family:
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
+    Arial,
+    sans-serif;
   font-size: var(--title-size, 44pt);
   line-height: 1.12;
   font-weight: 400;
@@ -190,8 +184,7 @@ input {
 }
 
 .article__body {
-  display: grid;
-  gap: var(--paragraph-gap, 1rem);
+  display: block;
   font-size: var(--body-size, 20pt);
   line-height: var(--body-line-height, 1.85);
   text-align: left;
@@ -204,6 +197,12 @@ input {
 .article__body p {
   margin: 0;
   text-indent: var(--paragraph-indent, 0pt);
+}
+
+.article__body p + p,
+.article__body p + .article-image,
+.article-image + p {
+  margin-top: var(--paragraph-gap, 1rem);
 }
 
 .article__body u {
@@ -224,24 +223,40 @@ input {
 
 .note-dot {
   position: relative;
-  display: inline-block;
-  width: 0.38em;
-  min-width: 0.38em;
-  height: 0.38em;
+  display: inline-flex;
+  width: 0.72em;
+  min-width: 0.72em;
+  height: 0.72em;
   min-height: 0;
+  align-items: center;
+  justify-content: center;
   padding: 0;
-  margin: 0 0.08em 0 0.02em;
+  margin: 0 -0.2em 0 0.02em;
   vertical-align: text-top;
-  background: #6af04d;
+  color: #1c7fb8;
+  background: transparent;
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
   box-shadow: none;
-  transform: translate(-0.04em, -0.36em);
+  opacity: 0.72;
+  transform: translate(-0.16em, -0.08em);
+}
+
+.note-dot::before {
+  font-family:
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
+    Arial,
+    sans-serif;
+  font-size: 0.72em;
+  line-height: 1;
+  content: "ㅇ";
 }
 
 .note-dot:hover,
 .note-dot:focus {
-  background: #6af04d;
+  color: var(--accent);
+  background: transparent;
   outline: 1px solid var(--fg);
   outline-offset: 2px;
 }
@@ -264,12 +279,16 @@ input {
 }
 
 .index-page {
-  display: grid;
+  display: flex;
   width: min(100%, 720px);
   min-height: calc(100vh - 84px);
   margin: 0 auto;
-  place-content: center;
-  justify-items: start;
+  align-items: center;
+  justify-content: center;
+}
+
+.index-page__inner {
+  width: min(100%, 520px);
 }
 
 .index-page h1 {
@@ -284,16 +303,41 @@ input {
 }
 
 .index-page nav {
-  display: grid;
-  gap: 12px;
+  display: block;
+}
+
+.index-page__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 14px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.index-page__row time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.72em;
+  font-variant-numeric: tabular-nums;
 }
 
 .to-top-button {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: 14px;
+  bottom: 14px;
   z-index: 5;
-  display: none;
+  display: block;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0 4px;
+  font-size: 0.52rem;
+  opacity: 0.34;
+}
+
+.to-top-button:hover,
+.to-top-button:focus {
+  opacity: 0.8;
 }
 
 .top-controls {
@@ -323,6 +367,15 @@ input {
   text-underline-offset: 3px;
 }
 
+.reader-chrome {
+  transition: opacity 420ms ease;
+}
+
+.reader-chrome.is-dissolved {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .button-link {
   display: inline-flex;
   min-height: 22px;
@@ -349,16 +402,21 @@ input {
 }
 
 .admin-layout {
-  display: grid;
-  grid-template-columns: minmax(150px, 220px) minmax(0, 760px);
+  display: flex;
+  align-items: flex-start;
   gap: 36px;
-  align-items: start;
 }
 
 .admin-index {
+  flex: 0 0 min(220px, 24vw);
   position: sticky;
   top: 24px;
   font-size: 0.82rem;
+}
+
+.editor {
+  flex: 1 1 760px;
+  max-width: 760px;
 }
 
 .admin-index__bar {
@@ -376,6 +434,15 @@ input {
 .empty-state {
   margin: 0;
   font-size: 0.82rem;
+}
+
+.admin-index__group {
+  margin-bottom: 22px;
+}
+
+.admin-index__group p {
+  margin: 0 0 8px;
+  color: var(--muted);
 }
 
 .editor__bar {
@@ -401,21 +468,9 @@ input {
   text-align: center;
 }
 
-.line-tool {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.line-tool input {
-  width: 46px;
-  padding: 1px 3px;
-  border: 1px solid var(--line);
-}
-
 .editor__settings {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 28px;
   padding-top: 14px;
@@ -423,8 +478,8 @@ input {
 }
 
 .editor__settings label {
-  display: grid;
-  gap: 4px;
+  display: block;
+  min-width: 128px;
 }
 
 .editor__settings span {
@@ -468,7 +523,8 @@ input {
 }
 
 .login-form {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   margin-top: 24px;
 }
@@ -480,21 +536,17 @@ input {
 
   .reader-layout,
   .admin-layout {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     gap: 28px;
   }
 
   .admin-index {
     position: static;
   }
-
-  .to-top-button {
-    display: block;
-  }
-}
-
-@media (max-width: 520px) {
-  .editor__settings {
-    grid-template-columns: 1fr;
+  .admin-index,
+  .editor {
+    width: 100%;
+    max-width: none;
+    flex-basis: auto;
   }
 }

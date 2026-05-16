@@ -37,6 +37,7 @@ test('Supabase client is wired to the target project without secret keys', async
   assert.match(client, /status=eq\.published/);
   assert.match(client, /listPostTitles/);
   assert.match(client, /getPostBySlug/);
+  assert.match(client, /status', 'neq\.archived'/);
 });
 
 test('admin page can sign in, list titles, set pt sizes, and save writing', async () => {
@@ -65,10 +66,13 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /data-action="theme"/);
   assert.match(app, /savePostWithSession/);
   assert.match(app, /refreshSessionIfNeeded/);
-  assert.doesNotMatch(app, /data-field="status"/);
-  assert.doesNotMatch(app, /status-toggle/);
-  assert.doesNotMatch(app, /saved as draft/);
-  assert.doesNotMatch(app, /turn on publish/);
+  assert.match(app, /data-action="publish"/);
+  assert.match(app, /aria-pressed="\$\{article\.status === 'published'\}"/);
+  assert.match(app, /status = publishEnabled\(\) \? 'published' : 'draft'/);
+  assert.match(app, /saved to Supabase as draft/);
+  assert.match(app, /data-action="trash"/);
+  assert.match(app, /status:\s*'archived'/);
+  assert.match(app, /trash/);
   assert.match(app, /localStorage/);
   assert.match(client, /\/auth\/v1\/token\?grant_type=password/);
   assert.match(client, /savePost/);
@@ -99,10 +103,11 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /data-action="top"/);
   assert.match(app, /scrollTo\(\{\s*top:\s*0,\s*behavior:\s*'smooth'/);
   assert.match(app, /renderTopControls/);
-  assert.match(app, /data-action="lang"/);
+  assert.match(app, /data-action="lang-toggle"/);
+  assert.match(app, /data-action="theme-toggle"/);
+  assert.match(app, /toggleLang/);
   assert.match(app, /한/);
   assert.match(app, /EN/);
-  assert.match(app, /data-action="theme"/);
   assert.match(app, /themeLabel/);
   assert.match(app, /DA/);
   assert.match(app, /LA/);
@@ -115,8 +120,10 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /data-note/);
   assert.match(app, /data-url/);
   assert.match(app, /lineHeight/);
-  assert.match(app, /data-action="apply-line"/);
-  assert.match(app, /selectedParagraphs/);
+  assert.doesNotMatch(app, /data-action="apply-line"/);
+  assert.doesNotMatch(app, /selectedParagraphs/);
+  assert.match(app, /reader-chrome/);
+  assert.match(app, /attachReaderChromeDissolve/);
   assert.match(app, /data-line-height/);
   assert.match(app, /sanitizeInlineHtml/);
   assert.match(app, /block\.html/);
@@ -124,7 +131,8 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /word-break:\s*keep-all/);
   assert.match(css, /overflow-wrap:\s*anywhere/);
   assert.match(css, /\.reader-index[\s\S]*position:\s*fixed/);
-  assert.match(css, /\.reader-layout[\s\S]*grid-template-columns:\s*1fr/);
+  assert.match(css, /\.reader-layout[\s\S]*display:\s*block/);
+  assert.doesNotMatch(css, /display:\s*grid|grid-template/);
   assert.match(css, /\.to-top-button/);
   assert.match(css, /position:\s*fixed/);
   assert.match(css, /@media \(max-width:\s*720px\)/);
@@ -134,10 +142,12 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /\.tool-button/);
   assert.match(css, /font-size:\s*0\.5/);
   assert.match(css, /\.note-dot/);
-  assert.match(css, /background:\s*#6af04d/);
+  assert.match(css, /color:\s*#1c7fb8/);
+  assert.match(css, /content:\s*"ㅇ"/);
   assert.match(css, /\.note-dot\.is-open::after/);
   assert.match(css, /text-decoration-style:\s*solid/);
-  assert.match(css, /\.index-page[\s\S]*place-content:\s*center/);
+  assert.match(css, /\.index-page[\s\S]*justify-content:\s*center/);
+  assert.match(css, /\.index-page__row[\s\S]*justify-content:\s*space-between/);
 });
 
 test('database schema enables RLS and public readers only see published posts', async () => {

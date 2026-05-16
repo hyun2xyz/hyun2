@@ -241,6 +241,7 @@ export async function getEditablePost(userId, accessToken, fetchImpl = fetch) {
   const url = new URL(POSTS_ENDPOINT);
   url.searchParams.set('select', POST_SELECT);
   url.searchParams.set('or', `(author_id.eq.${userId},author_id.is.null)`);
+  url.searchParams.set('status', 'neq.archived');
   url.searchParams.set('order', 'updated_at.desc');
   url.searchParams.set('limit', '1');
 

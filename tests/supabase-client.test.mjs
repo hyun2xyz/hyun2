@@ -87,6 +87,22 @@ test('savePost refreshes published_at when saving published writing', async () =
   assert.ok(Date.parse(payload.published_at));
 });
 
+test('savePost clears published_at when saving draft writing', async () => {
+  let payload;
+
+  await savePost({ ...article, status: 'draft' }, 'access-token', async (_url, options) => {
+    payload = JSON.parse(options.body);
+
+    return new Response(JSON.stringify([{ ...article, ...payload }]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  });
+
+  assert.equal(payload.status, 'draft');
+  assert.equal(payload.published_at, null);
+});
+
 test('refreshSession calls the Supabase refresh token endpoint', async () => {
   let request;
 
