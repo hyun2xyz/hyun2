@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { refreshSession, savePost, savePostWithSession, uploadPostImage } from '../src/supabase-client.js';
+import { refreshSession, savePost, savePostWithSession, updatePostContent, uploadPostImage } from '../src/supabase-client.js';
 
 const article = {
   id: '4d6d6594-0b48-4301-bac3-1965b3b38aa5',
@@ -71,7 +71,7 @@ test('savePost uses Supabase REST upsert headers that return the saved row', asy
   assert.doesNotMatch(preferHeader, /mode=upsert|;/);
 });
 
-test('savePost refreshes published_at when saving published writing', async () => {
+test('savePost preserves editable published_at when saving published writing', async () => {
   let payload;
 
   await savePost(article, 'access-token', async (_url, options) => {
@@ -83,8 +83,7 @@ test('savePost refreshes published_at when saving published writing', async () =
     });
   });
 
-  assert.notEqual(payload.published_at, article.published_at);
-  assert.ok(Date.parse(payload.published_at));
+  assert.equal(payload.published_at, article.published_at);
 });
 
 test('savePost clears published_at when saving draft writing', async () => {
@@ -212,4 +211,26 @@ test('uploadPostImage stores images in the post-images bucket and returns a publ
   assert.match(request.url, /\/storage\/v1\/object\/post-images\/posts\/hello-post\/.+\.webp$/);
   assert.match(result.image.path, /^posts\/hello-post\/.+\.webp$/);
   assert.match(result.image.src, /\/storage\/v1\/object\/public\/post-images\/posts\/hello-post\/.+\.webp$/);
+});
+
+test('updatePostContent patches only content for menu ordering metadata', async () => {
+  let request;
+  const result = await updatePostContent('post-id', '{"sortOrder":1}', 'access-token', async (url, options) => {
+    request = {
+      url: String(url),
+      method: options.method,
+      prefer: options.headers.Prefer,
+      auth: options.headers.Authorization,
+      body: JSON.parse(options.body)
+    };
+
+    return new Response('', { status: 200 });
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(request.method, 'PATCH');
+  assert.match(request.url, /id=eq\.post-id/);
+  assert.equal(request.prefer, 'return=minimal');
+  assert.equal(request.auth, 'Bearer access-token');
+  assert.deepEqual(request.body, { content: '{"sortOrder":1}' });
 });

@@ -7,7 +7,7 @@ const STORAGE_BUCKET = 'post-images';
 const PUBLISHED_STATUS_QUERY = 'status=eq.published';
 const upsertPreferHeader = 'resolution=merge-duplicates,return=representation';
 const POST_SELECT = 'id,author_id,title,slug,content,excerpt,status,published_at,updated_at';
-const TITLE_SELECT = 'id,title,slug,status,published_at,updated_at';
+const TITLE_SELECT = 'id,title,slug,status,published_at,updated_at,content';
 
 export function hasSupabaseConfig() {
   return Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
@@ -61,7 +61,7 @@ function payloadForPost(post, slug = post.slug) {
     excerpt: post.excerpt,
     content: post.content,
     status: post.status,
-    published_at: post.status === 'published' ? new Date().toISOString() : null
+    published_at: post.status === 'published' ? post.published_at ?? new Date().toISOString() : null
   };
 }
 
@@ -354,4 +354,28 @@ export async function uploadPostImage(file, { accessToken, slug = 'untitled' } =
       alt: file.name || 'uploaded image'
     }
   };
+}
+
+export async function updatePostContent(id, content, accessToken, fetchImpl = fetch) {
+  if (!hasSupabaseConfig() || !accessToken || !id) {
+    return { ok: false, reason: 'missing-content-update-config' };
+  }
+
+  const url = new URL(POSTS_ENDPOINT);
+  url.searchParams.set('id', `eq.${id}`);
+
+  const response = await fetchImpl(url, {
+    method: 'PATCH',
+    headers: authHeaders(accessToken, {
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal'
+    }),
+    body: JSON.stringify({ content })
+  });
+
+  if (!response.ok) {
+    return { ok: false, reason: `http-${response.status}` };
+  }
+
+  return { ok: true, reason: 'content-updated' };
 }

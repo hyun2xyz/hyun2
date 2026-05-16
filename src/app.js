@@ -7,6 +7,7 @@ import {
   refreshSession,
   savePostWithSession,
   signInWithPassword,
+  updatePostContent,
   uploadPostImage
 } from './supabase-client.js?v=20260516-storage-images';
 
@@ -69,6 +70,22 @@ function textFromHtml(html) {
   const template = document.createElement('template');
   template.innerHTML = String(html ?? '');
   return template.content.textContent?.trim() ?? '';
+}
+
+function dateInputValue(value) {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function dateInputToIso(value) {
+  const date = dateInputValue(value);
+  return date ? `${date}T00:00:00.000Z` : null;
 }
 
 function noteDotMarkup(note = '', url = '') {
@@ -226,7 +243,11 @@ function decodeContent(content) {
       return {
         body: parsed.body,
         blocks,
-        style: normalizeTypeSettings(parsed.style)
+        style: normalizeTypeSettings(parsed.style),
+        displayDate: parsed.displayDate ?? parsed.meta?.displayDate ?? '',
+        sortOrder: Number.isFinite(Number.parseFloat(parsed.sortOrder ?? parsed.meta?.sortOrder))
+          ? Number.parseFloat(parsed.sortOrder ?? parsed.meta?.sortOrder)
+          : null
       };
     }
   } catch {
@@ -236,17 +257,21 @@ function decodeContent(content) {
   return {
     body: raw,
     blocks: blocksFromText(raw),
-    style: normalizeTypeSettings()
+    style: normalizeTypeSettings(),
+    displayDate: '',
+    sortOrder: null
   };
 }
 
-function encodeContent(body, style, blocks = null) {
+function encodeContent(body, style, blocks = null, meta = {}) {
   const normalizedBlocks = normalizeBlocks(blocks, body);
 
   return JSON.stringify({
     body: String(body ?? ''),
     blocks: normalizedBlocks,
-    style: normalizeTypeSettings(style)
+    style: normalizeTypeSettings(style),
+    displayDate: dateInputValue(meta.displayDate),
+    sortOrder: Number.isFinite(Number.parseFloat(meta.sortOrder)) ? Number.parseFloat(meta.sortOrder) : null
   }, null, 2);
 }
 
@@ -440,12 +465,15 @@ function normalizeArticle(article = fallbackArticle) {
   const decoded = decodeContent(merged.content);
   const style = normalizeTypeSettings(merged.style ?? decoded.style ?? loadTypeSettings());
   const blocks = normalizeBlocks(merged.blocks ?? decoded.blocks, decoded.body);
+  const sortOrder = Number.parseFloat(merged.sort_order ?? merged.sortOrder ?? decoded.sortOrder);
 
   return {
     ...merged,
     content: decoded.body,
     blocks,
-    style
+    style,
+    display_date: dateInputValue(merged.display_date ?? decoded.displayDate ?? merged.published_at ?? merged.updated_at),
+    sort_order: Number.isFinite(sortOrder) ? sortOrder : null
   };
 }
 
@@ -521,12 +549,12 @@ function blockMarkup(block, options = {}) {
 
 function articleMarkup(article, options = {}) {
   const view = normalizeArticle(article);
-  const date = formatDate(view.published_at ?? view.updated_at);
+  const date = formatDate(view.display_date ?? view.published_at ?? view.updated_at);
   const blocks = view.blocks.length ? view.blocks : blocksFromText(view.content);
 
   return `
     <h1 class="article__title">${escapeHtml(view.title)}</h1>
-    ${date ? `<time class="article__date" datetime="${escapeHtml(view.published_at ?? view.updated_at)}">${escapeHtml(date)}</time>` : ''}
+    ${date ? `<time class="article__date" datetime="${escapeHtml(view.display_date ?? view.published_at ?? view.updated_at)}">${escapeHtml(date)}</time>` : ''}
     <div class="article__body">
       ${blocks.map((block) => blockMarkup(block, options)).join('')}
       ${options.editable && !blocks.length ? '<p><br></p>' : ''}
@@ -643,7 +671,7 @@ function renderIndexPage(posts = []) {
           ${posts.map((post) => `
             <a class="index-page__row" href="./?post=${encodeURIComponent(post.slug)}">
               <span>${escapeHtml(post.title)}</span>
-              <time>${escapeHtml(formatDate(post.published_at ?? post.updated_at))}</time>
+              <time>${escapeHtml(formatDate(post.display_date ?? post.published_at ?? post.updated_at))}</time>
             </a>
           `).join('')}
         </nav>
@@ -667,6 +695,26 @@ function dedupePostTitles(posts) {
     seen.add(key);
     return true;
   });
+}
+
+function enrichPostSummary(post, index = 0) {
+  const decoded = decodeContent(post.content);
+  const sortOrder = Number.parseFloat(post.sort_order ?? decoded.sortOrder);
+  return {
+    ...post,
+    display_date: dateInputValue(decoded.displayDate ?? post.published_at ?? post.updated_at),
+    sort_order: Number.isFinite(sortOrder) ? sortOrder : index
+  };
+}
+
+function sortPostSummaries(posts) {
+  return posts
+    .map(enrichPostSummary)
+    .sort((a, b) => {
+      if (a.status !== b.status) return String(a.status).localeCompare(String(b.status));
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+      return String(b.published_at ?? b.updated_at ?? '').localeCompare(String(a.published_at ?? a.updated_at ?? ''));
+    });
 }
 
 function renderReader(article, posts = []) {
@@ -736,6 +784,14 @@ function readTypeSettingsFromDom(article) {
   });
 }
 
+function readDisplayDateFromDom(article) {
+  return dateInputValue(document.querySelector('[name="displayDate"]')?.value
+    ?? article.display_date
+    ?? article.published_at
+    ?? article.updated_at
+    ?? new Date());
+}
+
 function editorBlocksFromDom() {
   const contentRoot = document.querySelector('[data-field="content"]');
   if (!contentRoot) return [];
@@ -788,10 +844,11 @@ function editorArticleFromDom(article, session = null) {
   const blocks = editorBlocksFromDom();
   const content = textFromBlocks(blocks).trim();
   const style = readTypeSettingsFromDom(article);
+  const displayDate = readDisplayDateFromDom(article);
   const textBlocks = blocks.filter((block) => block.type === 'text');
   const body = content || (blocks.some((block) => block.type === 'image') ? '' : fallbackArticle.content);
   const status = publishEnabled() ? 'published' : 'draft';
-  const publishedAt = status === 'published' ? new Date().toISOString() : null;
+  const publishedAt = status === 'published' ? dateInputToIso(displayDate) ?? new Date().toISOString() : null;
 
   return normalizeArticle({
     ...article,
@@ -802,6 +859,8 @@ function editorArticleFromDom(article, session = null) {
     content: body,
     blocks: blocks.length ? blocks : blocksFromText(body),
     style,
+    display_date: displayDate,
+    sort_order: article.sort_order,
     status,
     published_at: publishedAt
   });
@@ -811,7 +870,10 @@ function articleForSupabase(article) {
   const next = normalizeArticle(article);
   return {
     ...next,
-    content: encodeContent(next.content, next.style, next.blocks)
+    content: encodeContent(next.content, next.style, next.blocks, {
+      displayDate: next.display_date,
+      sortOrder: next.sort_order
+    })
   };
 }
 
@@ -988,6 +1050,8 @@ function insertInlineNode(contentRoot, node, options = {}) {
   if (range) {
     if (options.replaceSelection) {
       range.deleteContents();
+    } else if (options.beforeSelection) {
+      range.collapse(true);
     } else {
       range.collapse(false);
     }
@@ -1014,7 +1078,7 @@ function insertNoteDot(contentRoot, statusRoot) {
   const value = window.prompt('각주 내용이나 링크를 입력하세요.');
   if (value === null) return;
 
-  insertInlineNode(contentRoot, noteDotElement(value), { replaceSelection: false });
+  insertInlineNode(contentRoot, noteDotElement(value), { replaceSelection: false, beforeSelection: true });
   statusRoot.textContent = 'note dot added. save to publish.';
 }
 
@@ -1096,27 +1160,83 @@ function renderAdminIndex(posts, selectedSlug) {
     return '<p class="empty-state">아직 저장된 제목이 없습니다.</p>';
   }
 
-  const activePosts = posts.filter((post) => post.status !== 'archived');
+  const publishedPosts = posts.filter((post) => post.status === 'published');
+  const draftPosts = posts.filter((post) => post.status === 'draft');
   const trashPosts = posts.filter((post) => post.status === 'archived');
   const renderButton = (post) => `
       <button
         class="index-link ${post.slug === selectedSlug ? 'is-selected' : ''}"
         type="button"
+        draggable="true"
         data-action="select-post"
+        data-id="${escapeHtml(post.id ?? '')}"
         data-slug="${escapeHtml(post.slug)}"
       >${escapeHtml(post.title)}</button>
     `;
-
-  return `
+  const renderGroup = (label, group, groupPosts) => `
     <section class="admin-index__group">
-      <p>published / draft</p>
-      ${activePosts.length ? activePosts.map(renderButton).join('') : '<span class="empty-state">비어 있습니다.</span>'}
-    </section>
-    <section class="admin-index__group">
-      <p>trash</p>
-      ${trashPosts.length ? trashPosts.map(renderButton).join('') : '<span class="empty-state">비어 있습니다.</span>'}
+      <p>${label}</p>
+      <div class="admin-index__items" data-index-group="${group}">
+        ${groupPosts.length ? groupPosts.map(renderButton).join('') : '<span class="empty-state">비어 있습니다.</span>'}
+      </div>
     </section>
   `;
+
+  return `
+    ${renderGroup('published', 'published', publishedPosts)}
+    ${renderGroup('draft', 'draft', draftPosts)}
+    ${renderGroup('trash', 'archived', trashPosts)}
+  `;
+}
+
+function contentWithMeta(post, metaPatch = {}) {
+  const decoded = decodeContent(post.content);
+  return encodeContent(decoded.body, decoded.style, decoded.blocks, {
+    displayDate: metaPatch.displayDate ?? decoded.displayDate ?? post.display_date,
+    sortOrder: metaPatch.sortOrder ?? decoded.sortOrder ?? post.sort_order
+  });
+}
+
+function attachAdminIndexDrag(root, posts, session, statusRoot) {
+  const postMap = new Map(posts.map((post) => [post.slug, post]));
+  let draggedSlug = '';
+
+  root.querySelectorAll('.index-link[draggable="true"]').forEach((button) => {
+    button.addEventListener('dragstart', (event) => {
+      draggedSlug = button.dataset.slug;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', draggedSlug);
+    });
+
+    button.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    });
+
+    button.addEventListener('drop', async (event) => {
+      event.preventDefault();
+      const source = root.querySelector(`.index-link[data-slug="${CSS.escape(draggedSlug)}"]`);
+      const target = event.currentTarget;
+      const sourceGroup = source?.closest('[data-index-group]');
+      const targetGroup = target.closest('[data-index-group]');
+      if (!source || !target || source === target || sourceGroup !== targetGroup) return;
+
+      targetGroup.insertBefore(source, target);
+      const buttons = Array.from(targetGroup.querySelectorAll('.index-link'));
+      const updates = buttons.map((item, index) => {
+        const post = postMap.get(item.dataset.slug);
+        if (!post?.id || !session?.access_token) return Promise.resolve({ ok: true });
+        post.sort_order = index;
+        post.content = contentWithMeta(post, { sortOrder: index });
+        return updatePostContent(post.id, post.content, session.access_token);
+      });
+
+      const results = await Promise.all(updates);
+      statusRoot.textContent = results.every((result) => result.ok)
+        ? 'menu order saved.'
+        : 'menu order changed locally, but Supabase order save failed.';
+    });
+  });
 }
 
 async function loadAdminState(session, options = {}) {
@@ -1127,7 +1247,7 @@ async function loadAdminState(session, options = {}) {
   if (hasSupabaseConfig() && session?.access_token) {
     const titleResult = await listPostTitles(session.access_token);
     if (titleResult.ok) {
-      posts = dedupePostTitles(titleResult.posts);
+      posts = sortPostSummaries(dedupePostTitles(titleResult.posts));
     } else {
       source = `supabase index failed: ${titleResult.reason}`;
     }
@@ -1148,7 +1268,7 @@ async function loadAdminState(session, options = {}) {
   }
 
   if (!posts.length && article.title) {
-    posts = [{ title: article.title, slug: article.slug, status: article.status }];
+    posts = [enrichPostSummary({ title: article.title, slug: article.slug, status: article.status, content: article.content })];
   }
 
   return { article, posts, source };
@@ -1200,7 +1320,7 @@ async function renderEditor(options = {}) {
         <div class="editor__bar">
           <button type="button" data-action="new">new</button>
           <button type="button" data-action="save">save</button>
-          <button type="button" data-action="publish" aria-pressed="${article.status === 'published'}">${article.status === 'published' ? 'published' : 'publish'}</button>
+          <button type="button" data-action="publish" aria-pressed="${article.status === 'published'}">${article.status === 'published' ? 'status: published' : 'status: draft'}</button>
           <a class="button-link" href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
           <button type="button" data-action="trash">trash</button>
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
@@ -1212,6 +1332,10 @@ async function renderEditor(options = {}) {
         </div>
 
         <div class="editor__settings" data-panel="settings" aria-label="글자 설정">
+          <label>
+            date
+            <span><input name="displayDate" type="date" value="${escapeHtml(article.display_date || dateInputValue(article.published_at ?? article.updated_at ?? new Date()))}"></span>
+          </label>
           <label>
             title
             <span><input name="titleSizePt" type="number" min="8" max="120" step="1" value="${style.titleSizePt}"> pt</span>
@@ -1243,13 +1367,14 @@ async function renderEditor(options = {}) {
   attachImageDrop(contentRoot, statusRoot, session, article);
   attachEditorFormatting(root, contentRoot, statusRoot);
   attachImageControls(root, statusRoot);
+  attachAdminIndexDrag(root, posts, session, statusRoot);
   attachNoteDots(root);
 
   root.querySelector('[data-action="publish"]').addEventListener('click', (event) => {
     const button = event.currentTarget;
     const next = button.getAttribute('aria-pressed') !== 'true';
     button.setAttribute('aria-pressed', String(next));
-    button.textContent = next ? 'published' : 'publish';
+    button.textContent = next ? 'status: published' : 'status: draft';
   });
 
   root.querySelectorAll('[name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"]').forEach((input) => {
@@ -1277,6 +1402,8 @@ async function renderEditor(options = {}) {
       excerpt: 'Hyun2',
       content: '',
       status: 'draft',
+      display_date: dateInputValue(now),
+      sort_order: posts.filter((post) => post.status === 'draft').length,
       published_at: null,
       updated_at: now,
       style: loadTypeSettings(style)
@@ -1367,9 +1494,9 @@ async function renderPublicPage() {
     setCurrentArticle(article);
   }
 
-  if (titleResult.ok) {
-    posts = dedupePostTitles(titleResult.posts);
-  }
+    if (titleResult.ok) {
+      posts = sortPostSummaries(dedupePostTitles(titleResult.posts));
+    }
 
   if (isIndexPage) {
     renderIndexPage(posts);

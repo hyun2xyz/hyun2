@@ -37,6 +37,7 @@ test('Supabase client is wired to the target project without secret keys', async
   assert.match(client, /status=eq\.published/);
   assert.match(client, /listPostTitles/);
   assert.match(client, /getPostBySlug/);
+  assert.match(client, /TITLE_SELECT = 'id,title,slug,status,published_at,updated_at,content'/);
   assert.match(client, /status', 'neq\.archived'/);
 });
 
@@ -70,12 +71,22 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /savePostWithSession/);
   assert.match(app, /refreshSessionIfNeeded/);
   assert.match(app, /data-action="publish"/);
-  assert.match(app, /aria-pressed="\$\{article\.status === 'published'\}"/);
+  assert.match(app, /status: published/);
+  assert.match(app, /status: draft/);
   assert.match(app, /status = publishEnabled\(\) \? 'published' : 'draft'/);
+  assert.match(app, /name="displayDate"/);
+  assert.match(app, /dateInputToIso/);
+  assert.match(app, /displayDate/);
   assert.match(app, /saved to Supabase as draft/);
   assert.match(app, /data-action="trash"/);
   assert.match(app, /status:\s*'archived'/);
   assert.match(app, /trash/);
+  assert.match(app, /draggable="true"/);
+  assert.match(app, /renderGroup\('published', 'published'/);
+  assert.match(app, /renderGroup\('draft', 'draft'/);
+  assert.match(app, /data-index-group="\$\{group\}"/);
+  assert.match(app, /updatePostContent/);
+  assert.match(app, /menu order saved/);
   assert.match(app, /localStorage/);
   assert.match(client, /\/auth\/v1\/token\?grant_type=password/);
   assert.match(client, /savePost/);
@@ -123,6 +134,7 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /execCommand\('underline'\)/);
   assert.match(app, /textDecoration/);
   assert.match(app, /data-action="note"/);
+  assert.match(app, /beforeSelection:\s*true/);
   assert.match(app, /range\.collapse\(false\)/);
   assert.match(app, /note-dot/);
   assert.match(app, /data-note/);
