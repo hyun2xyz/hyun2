@@ -191,6 +191,7 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /font-size:\s*0\.58em/);
   assert.match(css, /\.note-dot:hover,[\s\S]*outline:\s*0/);
   assert.match(css, /\.note-dot\.is-open::after/);
+  assert.match(css, /\.note-dot\.is-open::after[\s\S]*font-size:\s*0\.46rem/);
   assert.match(css, /text-decoration-style:\s*solid/);
   assert.match(css, /\.index-page[\s\S]*justify-content:\s*center/);
   assert.match(css, /\.index-page__row[\s\S]*justify-content:\s*space-between/);

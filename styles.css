@@ -300,8 +300,15 @@ input {
   z-index: 4;
   width: max-content;
   max-width: min(260px, 70vw);
-  padding: 6px 8px;
+  padding: 4px 6px;
   color: var(--bg);
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  font-size: 0.46rem;
+  line-height: 1.25;
   white-space: normal;
   text-indent: 0;
   content: attr(data-note);
