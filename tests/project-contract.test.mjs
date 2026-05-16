@@ -124,7 +124,8 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.doesNotMatch(app, /selectedParagraphs/);
   assert.match(app, /reader-chrome/);
   assert.match(app, /attachReaderChromeDissolve/);
-  assert.match(app, /setTimeout\(hide,\s*160\)/);
+  assert.doesNotMatch(app, /setTimeout\(hide/);
+  assert.match(app, /nextY > 24[\s\S]*hide\(\)/);
   assert.match(app, /topButton\?\.classList\.add\('is-visible'\)/);
   assert.match(app, /topButton\?\.classList\.remove\('is-visible'\)/);
   assert.match(app, /data-line-height/);

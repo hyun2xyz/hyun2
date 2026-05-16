@@ -583,7 +583,6 @@ function attachReaderChromeDissolve(root) {
   if (!chrome.length) return;
 
   let lastY = window.scrollY;
-  let timer = 0;
 
   const show = () => {
     chrome.forEach((element) => element.classList.remove('is-dissolved'));
@@ -595,12 +594,11 @@ function attachReaderChromeDissolve(root) {
   };
 
   window.addEventListener('scroll', () => {
-    window.clearTimeout(timer);
     const nextY = window.scrollY;
     if (nextY <= 24 || nextY < lastY) {
       show();
-    } else if (nextY > 36) {
-      timer = window.setTimeout(hide, 160);
+    } else if (nextY > 24) {
+      hide();
     }
     lastY = nextY;
   }, { passive: true });
