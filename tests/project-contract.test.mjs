@@ -133,7 +133,12 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /data-action="underline"/);
   assert.match(app, /execCommand\('underline'\)/);
   assert.match(app, /textDecoration/);
-  assert.match(app, /data-action="note"/);
+  assert.match(app, />밑줄</);
+  assert.match(app, />하이퍼링크</);
+  assert.match(app, /editor__inline-tools/);
+  assert.match(app, /data-action="link"/);
+  assert.match(app, /execCommand\('createLink'/);
+  assert.doesNotMatch(app, /data-action="note"/);
   assert.match(app, /beforeSelection:\s*true/);
   assert.match(app, /range\.collapse\(false\)/);
   assert.match(app, /note-dot/);
@@ -172,9 +177,9 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*\.top-controls[\s\S]*position:\s*static/);
   assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*\.reader-index[\s\S]*position:\s*static/);
   assert.match(css, /\.button-link/);
-  assert.match(css, /\.editor__tools/);
-  assert.match(css, /\.tool-button/);
-  assert.match(css, /font-size:\s*0\.5/);
+  assert.doesNotMatch(css, /\.editor__tools/);
+  assert.match(css, /\.editor__inline-tools/);
+  assert.match(css, /\.text-tool/);
   assert.match(css, /\.note-dot/);
   assert.match(css, /counter-reset:\s*note-number/);
   assert.match(css, /color:\s*#d11c24/);

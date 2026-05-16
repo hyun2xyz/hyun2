@@ -153,7 +153,7 @@ input {
 .editor__note,
 .editor__status,
 .editor__bar,
-.editor__tools {
+.editor__inline-tools {
   font-family:
     ui-monospace,
     SFMono-Regular,
@@ -502,19 +502,6 @@ input {
   border-bottom: 1px solid var(--line);
 }
 
-.editor__tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-
-.tool-button {
-  min-width: 24px;
-  text-align: center;
-}
-
 .editor__settings {
   display: flex;
   flex-wrap: wrap;
@@ -539,6 +526,27 @@ input {
   width: 72px;
   border: 1px solid var(--line);
   padding: 2px 4px;
+}
+
+.editor__inline-tools {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding-top: 25px;
+}
+
+.text-tool {
+  min-width: 0;
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.text-tool:hover,
+.text-tool:focus-visible {
+  color: var(--accent);
 }
 
 .editor__title,

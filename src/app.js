@@ -1093,13 +1093,37 @@ function underlineSelection(contentRoot, statusRoot) {
   statusRoot.textContent = 'underline added. save to publish.';
 }
 
+function linkSelection(contentRoot, statusRoot) {
+  const range = selectionRangeIn(contentRoot);
+  if (!range || range.collapsed) {
+    statusRoot.textContent = 'drag text first, then press hyperlink.';
+    return;
+  }
+
+  const href = sanitizeLinkUrl(window.prompt('링크 주소를 입력하세요.'));
+  if (!href) {
+    statusRoot.textContent = 'https://, http://, mailto: 링크만 사용할 수 있습니다.';
+    return;
+  }
+
+  document.execCommand('createLink', false, href);
+  contentRoot.querySelectorAll('a').forEach((anchor) => {
+    const cleanHref = sanitizeLinkUrl(anchor.getAttribute('href'));
+    if (!cleanHref) return;
+    anchor.setAttribute('href', cleanHref);
+    anchor.setAttribute('target', '_blank');
+    anchor.setAttribute('rel', 'noopener noreferrer');
+  });
+  statusRoot.textContent = 'hyperlink added. save to publish.';
+}
+
 function attachEditorFormatting(root, contentRoot, statusRoot) {
   root.querySelector('[data-action="underline"]')?.addEventListener('click', () => {
     underlineSelection(contentRoot, statusRoot);
   });
 
-  root.querySelector('[data-action="note"]')?.addEventListener('click', () => {
-    insertNoteDot(contentRoot, statusRoot);
+  root.querySelector('[data-action="link"]')?.addEventListener('click', () => {
+    linkSelection(contentRoot, statusRoot);
   });
 }
 
@@ -1326,11 +1350,6 @@ async function renderEditor(options = {}) {
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
         </div>
 
-        <div class="editor__tools" data-panel="tools" aria-label="글 수정 도구">
-          <button class="tool-button" type="button" data-action="underline" title="선택한 글자에 밑줄">U</button>
-          <button class="tool-button note-tool" type="button" data-action="note" title="선택한 글자 옆에 파란 주석 표시 추가">ㅇ</button>
-        </div>
-
         <div class="editor__settings" data-panel="settings" aria-label="글자 설정">
           <label>
             date
@@ -1352,6 +1371,10 @@ async function renderEditor(options = {}) {
             indent
             <span><input name="indentPt" type="number" min="0" max="120" step="1" value="${style.indentPt}"> pt</span>
           </label>
+          <div class="editor__inline-tools" data-panel="tools" aria-label="글 수정 도구">
+            <button class="text-tool" type="button" data-action="underline" title="선택한 글자에 밑줄">밑줄</button>
+            <button class="text-tool" type="button" data-action="link" title="선택한 글자에 하이퍼링크">하이퍼링크</button>
+          </div>
         </div>
 
         <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(article.title)}</h1>
