@@ -148,7 +148,10 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, />하이퍼링크</);
   assert.match(app, /editor__inline-tools/);
   assert.match(app, /data-action="link"/);
-  assert.match(app, /execCommand\('createLink'/);
+  assert.match(app, /insertHyperlinkNote/);
+  assert.match(app, /hyperlinkNoteElement/);
+  assert.match(app, /hyperlink note added/);
+  assert.doesNotMatch(app, /execCommand\('createLink'/);
   assert.doesNotMatch(app, /data-action="note"/);
   assert.match(app, /beforeSelection:\s*true/);
   assert.match(app, /range\.collapse\(false\)/);

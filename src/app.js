@@ -1110,6 +1110,12 @@ function noteDotElement(value) {
   return template.content.firstElementChild;
 }
 
+function hyperlinkNoteElement(url) {
+  const template = document.createElement('template');
+  template.innerHTML = noteDotMarkup('', url);
+  return template.content.firstElementChild;
+}
+
 function insertNoteDot(contentRoot, statusRoot) {
   const value = window.prompt('각주 내용이나 링크를 입력하세요.');
   if (value === null) return;
@@ -1129,28 +1135,15 @@ function underlineSelection(contentRoot, statusRoot) {
   statusRoot.textContent = 'underline added. save to publish.';
 }
 
-function linkSelection(contentRoot, statusRoot) {
-  const range = selectionRangeIn(contentRoot);
-  if (!range || range.collapsed) {
-    statusRoot.textContent = 'drag text first, then press hyperlink.';
-    return;
-  }
-
+function insertHyperlinkNote(contentRoot, statusRoot) {
   const href = sanitizeLinkUrl(window.prompt('링크 주소를 입력하세요.'));
   if (!href) {
     statusRoot.textContent = 'https://, http://, mailto: 링크만 사용할 수 있습니다.';
     return;
   }
 
-  document.execCommand('createLink', false, href);
-  contentRoot.querySelectorAll('a').forEach((anchor) => {
-    const cleanHref = sanitizeLinkUrl(anchor.getAttribute('href'));
-    if (!cleanHref) return;
-    anchor.setAttribute('href', cleanHref);
-    anchor.setAttribute('target', '_blank');
-    anchor.setAttribute('rel', 'noopener noreferrer');
-  });
-  statusRoot.textContent = 'hyperlink added. save to publish.';
+  insertInlineNode(contentRoot, hyperlinkNoteElement(href), { replaceSelection: false, beforeSelection: true });
+  statusRoot.textContent = 'hyperlink note added. save to publish.';
 }
 
 function attachEditorFormatting(root, contentRoot, statusRoot) {
@@ -1159,7 +1152,7 @@ function attachEditorFormatting(root, contentRoot, statusRoot) {
   });
 
   root.querySelector('[data-action="link"]')?.addEventListener('click', () => {
-    linkSelection(contentRoot, statusRoot);
+    insertHyperlinkNote(contentRoot, statusRoot);
   });
 }
 
