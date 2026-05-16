@@ -104,6 +104,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /--body-line-height/);
   assert.match(css, /--paragraph-gap/);
   assert.match(css, /--paragraph-indent/);
+  assert.match(css, /\.article__body p:first-of-type[\s\S]*text-indent:\s*0/);
   assert.match(css, /\.article-image--wrap/);
   assert.match(css, /float:\s*left/);
   assert.match(css, /\.image-tools/);

@@ -199,6 +199,10 @@ input {
   text-indent: var(--paragraph-indent, 0pt);
 }
 
+.article__body p:first-of-type {
+  text-indent: 0;
+}
+
 .article__body p + p,
 .article__body p + .article-image,
 .article-image + p {
