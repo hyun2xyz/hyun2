@@ -16,8 +16,8 @@ test('home page renders a centered writing draft', async () => {
   assert.match(html, /id="article-root"/);
   assert.doesNotMatch(html, /data-admin/);
   assert.match(html, /src="\.\/src\/app\.js\?v=/);
-  assert.match(css, /--bg:\s*#f7f0df/);
-  assert.match(css, /--fg:\s*#1c1510/);
+  assert.match(css, /--bg:\s*#fff/);
+  assert.match(css, /--fg:\s*#000/);
   assert.match(html, /Gowun\+Batang/);
   assert.match(app, /가안:/);
   assert.match(app, /renderArticle/);
@@ -25,26 +25,6 @@ test('home page renders a centered writing draft', async () => {
   assert.match(app, /formatDate/);
   assert.doesNotMatch(app, /article__meta/);
   assert.doesNotMatch(app, /renderArticle\(local\)/);
-});
-
-test('handmade reference design uses paper, copper thread, and stable cache busting', async () => {
-  const html = await file('index.html');
-  const adminHtml = await file('admin.html');
-  const app = await file('src/app.js');
-  const css = await file('styles.css');
-
-  assert.match(html, /styles\.css\?v=20260516-handmade/);
-  assert.match(adminHtml, /styles\.css\?v=20260516-handmade/);
-  assert.match(css, /--paper:\s*#fff8ea/);
-  assert.match(css, /--copper:\s*#a65a2a/);
-  assert.match(css, /--thread:\s*#c99868/);
-  assert.match(css, /repeating-linear-gradient/);
-  assert.match(css, /border-left:\s*1px dashed var\(--thread\)/);
-  assert.match(css, /text-decoration-style:\s*wavy/);
-  assert.match(css, /box-shadow:\s*2px 2px 0/);
-  assert.match(css, /data-theme="dark"/);
-  assert.doesNotMatch(css, /prefers-color-scheme:\s*dark/);
-  assert.match(app, /function currentTheme\(\)[\s\S]*return 'light';\n}/);
 });
 
 test('Supabase client is wired to the target project without secret keys', async () => {

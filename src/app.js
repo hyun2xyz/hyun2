@@ -7,7 +7,7 @@ import {
   refreshSession,
   savePostWithSession,
   signInWithPassword
-} from './supabase-client.js?v=20260516-handmade';
+} from './supabase-client.js?v=20260514-2205';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
@@ -203,7 +203,7 @@ function clearSession() {
 function currentTheme() {
   const theme = document.documentElement.dataset.theme;
   if (theme === 'dark' || theme === 'light') return theme;
-  return 'light';
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function setTheme(theme) {
