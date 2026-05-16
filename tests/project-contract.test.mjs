@@ -156,9 +156,11 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /\.tool-button/);
   assert.match(css, /font-size:\s*0\.5/);
   assert.match(css, /\.note-dot/);
-  assert.match(css, /color:\s*#1c7fb8/);
-  assert.match(css, /content:\s*"ㅇ"/);
-  assert.match(css, /font-size:\s*0\.36em/);
+  assert.match(css, /counter-reset:\s*note-number/);
+  assert.match(css, /color:\s*#d11c24/);
+  assert.match(css, /counter-increment:\s*note-number/);
+  assert.match(css, /content:\s*counter\(note-number\)/);
+  assert.match(css, /font-size:\s*0\.58em/);
   assert.match(css, /\.note-dot:hover,[\s\S]*outline:\s*0/);
   assert.match(css, /\.note-dot\.is-open::after/);
   assert.match(css, /text-decoration-style:\s*solid/);
