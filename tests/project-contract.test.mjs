@@ -19,12 +19,16 @@ test('home page renders a centered writing draft', async () => {
   assert.match(css, /--bg:\s*#fff/);
   assert.match(css, /--fg:\s*#000/);
   assert.match(html, /Gowun\+Batang/);
-  assert.match(app, /가안:/);
+  assert.doesNotMatch(app, /title:\s*'가안: 가운데에 놓인 글'/);
+  assert.match(app, /centered-draft/);
   assert.match(app, /renderArticle/);
   assert.match(app, /article__date/);
   assert.match(app, /formatDate/);
   assert.doesNotMatch(app, /article__meta/);
   assert.doesNotMatch(app, /renderArticle\(local\)/);
+  assert.match(app, /isBootstrapArticle/);
+  assert.match(app, /filterBootstrapPosts/);
+  assert.match(app, /blankArticle/);
 });
 
 test('Supabase client is wired to the target project without secret keys', async () => {
@@ -220,6 +224,8 @@ test('database schema enables RLS and public readers only see published posts', 
   assert.match(schema, /post-images/i);
   assert.match(schema, /post images are readable by anyone/i);
   assert.match(schema, /authenticated users can upload post images/i);
+  assert.doesNotMatch(schema, /centered-draft/i);
+  assert.doesNotMatch(schema, /가안: 가운데에 놓인 글/);
 });
 
 test('GitHub push can deploy the static site through Pages actions', async () => {

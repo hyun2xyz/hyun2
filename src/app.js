@@ -24,17 +24,31 @@ const DEFAULT_TYPE_SETTINGS = {
 };
 
 const fallbackArticle = {
-  title: '가안: 가운데에 놓인 글',
-  slug: 'centered-draft',
-  excerpt: 'Hyun2 첫 번째 발행면',
-  content: [
-    '이곳은 HTML을 직접 고치지 않고, 웹 안에서 글을 쓰고 발행하기 위한 작은 시작점입니다.',
-    '지금은 한 편의 글이 화면 가운데 조용히 놓여 있습니다. 다음 단계에서는 Supabase의 published 글을 읽어오고, 나만 들어갈 수 있는 쓰기 화면을 붙이면 됩니다.',
-    '글은 페이지의 장식보다 먼저 오고, 도구는 글을 방해하지 않는 만큼만 남깁니다.'
-  ].join('\n\n'),
-  status: 'published',
-  updated_at: new Date().toISOString()
+  title: '제목 없는 글',
+  slug: '',
+  excerpt: 'Hyun2',
+  content: '',
+  status: 'draft',
+  published_at: null,
+  updated_at: ''
 };
+
+function blankArticle(overrides = {}) {
+  return {
+    ...fallbackArticle,
+    updated_at: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+function isBootstrapArticle(article = {}) {
+  return String(article.slug ?? '') === 'centered-draft'
+    || String(article.title ?? '').trim() === '가안: 가운데에 놓인 글';
+}
+
+function filterBootstrapPosts(posts = []) {
+  return posts.filter((post) => !isBootstrapArticle(post));
+}
 
 const routeParams = new URLSearchParams(window.location.search);
 const isAdminPage = document.body.dataset.admin === 'true'
@@ -290,6 +304,10 @@ function saveTypeSettings(settings) {
 function loadLocalDraft() {
   try {
     const draft = JSON.parse(localStorage.getItem(LOCAL_DRAFT_KEY)) ?? null;
+    if (draft && isBootstrapArticle(draft)) {
+      localStorage.removeItem(LOCAL_DRAFT_KEY);
+      return null;
+    }
     return draft ? normalizeArticle(draft) : null;
   } catch {
     return null;
@@ -478,7 +496,13 @@ function normalizeArticle(article = fallbackArticle) {
 }
 
 function currentArticle() {
-  return normalizeArticle(window.hyun2Article ?? loadLocalDraft() ?? fallbackArticle);
+  const windowArticle = window.hyun2Article;
+  if (windowArticle && !isBootstrapArticle(windowArticle)) return normalizeArticle(windowArticle);
+
+  const localDraft = loadLocalDraft();
+  if (localDraft) return normalizeArticle(localDraft);
+
+  return normalizeArticle(hasSupabaseConfig() ? blankArticle() : fallbackArticle);
 }
 
 function setCurrentArticle(article) {
@@ -1305,27 +1329,36 @@ async function loadAdminState(session, options = {}) {
   if (hasSupabaseConfig() && session?.access_token) {
     const titleResult = await listPostTitles(session.access_token);
     if (titleResult.ok) {
-      posts = sortPostSummaries(dedupePostTitles(titleResult.posts));
+      posts = filterBootstrapPosts(sortPostSummaries(dedupePostTitles(titleResult.posts)));
     } else {
       source = `supabase index failed: ${titleResult.reason}`;
     }
 
-    const selectedSlug = options.selectedSlug
-      ?? routeParams.get('post')
-      ?? article.slug
+    const requestedSlug = options.selectedSlug ?? routeParams.get('post');
+    const currentSlug = !isBootstrapArticle(article) && posts.some((post) => post.slug === article.slug)
+      ? article.slug
+      : '';
+    const selectedSlug = !isBootstrapArticle({ slug: requestedSlug })
+      ? requestedSlug
+      : currentSlug
+      || posts.find((post) => post.status !== 'archived')?.slug
+      || posts[0]?.slug;
+
+    const fallbackSlug = selectedSlug
+      ?? currentSlug
       ?? posts.find((post) => post.status !== 'archived')?.slug
       ?? posts[0]?.slug;
 
-    if (!options.article && selectedSlug) {
-      const postResult = await getPostBySlug(selectedSlug, session.access_token);
-      if (postResult.ok && postResult.post) {
+    if (!options.article && fallbackSlug) {
+      const postResult = await getPostBySlug(fallbackSlug, session.access_token);
+      if (postResult.ok && postResult.post && !isBootstrapArticle(postResult.post)) {
         article = normalizeArticle(postResult.post);
         source = 'supabase';
       }
     }
   }
 
-  if (!posts.length && article.title) {
+  if (!posts.length && article.title && (!hasSupabaseConfig() || !session?.access_token)) {
     posts = [enrichPostSummary({ title: article.title, slug: article.slug, status: article.status, content: article.content })];
   }
 
@@ -1539,21 +1572,35 @@ async function renderPublicPage() {
   const requestedSlug = routeParams.get('post') ?? routeParams.get('slug');
   const local = currentArticle();
   let article = local;
-  let posts = local.slug ? [{ title: local.title, slug: local.slug, status: local.status }] : [];
+  let posts = local.slug && !isBootstrapArticle(local)
+    ? [{ title: local.title, slug: local.slug, status: local.status }]
+    : [];
 
   const [postResult, titleResult] = await Promise.all([
-    isIndexPage ? Promise.resolve({ ok: false, post: null }) : requestedSlug ? getPostBySlug(requestedSlug) : getLatestPublishedPost(),
+    isIndexPage || isBootstrapArticle({ slug: requestedSlug })
+      ? Promise.resolve({ ok: false, post: null })
+      : requestedSlug
+        ? getPostBySlug(requestedSlug)
+        : getLatestPublishedPost(),
     listPostTitles()
   ]);
 
-  if (postResult.ok && postResult.post) {
+  if (postResult.ok && postResult.post && !isBootstrapArticle(postResult.post)) {
     article = normalizeArticle(postResult.post);
     setCurrentArticle(article);
   }
 
-    if (titleResult.ok) {
-      posts = sortPostSummaries(dedupePostTitles(titleResult.posts));
-    }
+  if (titleResult.ok) {
+    posts = filterBootstrapPosts(sortPostSummaries(dedupePostTitles(titleResult.posts)));
+  }
+
+  if ((!article.title || isBootstrapArticle(article)) && posts[0]) {
+    article = normalizeArticle(posts[0]);
+    setCurrentArticle(article);
+  } else if ((!article.title || isBootstrapArticle(article)) && hasSupabaseConfig()) {
+    article = normalizeArticle(blankArticle());
+    setCurrentArticle(article);
+  }
 
   if (isIndexPage) {
     renderIndexPage(posts);
