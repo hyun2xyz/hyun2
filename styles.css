@@ -152,8 +152,7 @@ input {
 
 .editor__note,
 .editor__status,
-.editor__bar,
-.editor__inline-tools {
+.editor__bar {
   font-family:
     ui-monospace,
     SFMono-Regular,
@@ -307,7 +306,7 @@ input {
     SFMono-Regular,
     Menlo,
     monospace;
-  font-size: 0.46rem;
+  font-size: 11px;
   line-height: 1.25;
   white-space: normal;
   text-indent: 0;
@@ -512,7 +511,9 @@ input {
 .editor__settings {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  align-items: flex-end;
+  column-gap: 8px;
+  row-gap: 12px;
   margin-bottom: 28px;
   padding-top: 14px;
   border-top: 1px solid var(--line);
@@ -537,14 +538,19 @@ input {
 
 .editor__inline-tools {
   display: inline-flex;
-  align-items: flex-end;
+  align-items: baseline;
+  align-self: flex-end;
   gap: 10px;
-  padding-top: 25px;
+  padding-top: 0;
+  padding-bottom: 2px;
 }
 
 .text-tool {
   min-width: 0;
+  min-height: 0;
   padding: 1px 0;
+  font-size: inherit;
+  line-height: 1.12;
   border: 0;
   background: transparent;
   text-decoration: underline;
