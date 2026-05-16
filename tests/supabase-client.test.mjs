@@ -213,6 +213,26 @@ test('uploadPostImage stores images in the post-images bucket and returns a publ
   assert.match(result.image.src, /\/storage\/v1\/object\/public\/post-images\/posts\/hello-post\/.+\.webp$/);
 });
 
+test('uploadPostImage reports a missing Storage bucket clearly', async () => {
+  const file = new Blob(['image'], { type: 'image/webp' });
+  file.name = 'hello.webp';
+
+  const result = await uploadPostImage(file, {
+    accessToken: 'access-token',
+    slug: 'hello post'
+  }, async () => new Response(JSON.stringify({
+    statusCode: '404',
+    error: 'Bucket not found',
+    message: 'Bucket not found'
+  }), {
+    status: 400,
+    headers: { 'Content-Type': 'application/json' }
+  }));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'storage-bucket-missing');
+});
+
 test('updatePostContent patches only content for menu ordering metadata', async () => {
   let request;
   const result = await updatePostContent('post-id', '{"sortOrder":1}', 'access-token', async (url, options) => {

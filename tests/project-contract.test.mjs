@@ -64,6 +64,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /data-block-type="image"/);
   assert.match(app, /uploadPostImage/);
   assert.match(app, /optimizedImageFile/);
+  assert.match(app, /hasImageInDataTransfer/);
+  assert.match(app, /dataTransfer\?\.items/);
+  assert.match(app, /item\.kind === 'file'/);
   assert.match(app, /data-image-action="wrap"/);
   assert.match(app, /image layout changed/);
   assert.match(app, /data-action="save"/);

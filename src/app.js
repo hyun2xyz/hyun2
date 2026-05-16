@@ -9,7 +9,7 @@ import {
   signInWithPassword,
   updatePostContent,
   uploadPostImage
-} from './supabase-client.js?v=20260516-storage-images';
+} from './supabase-client.js?v=20260516-image-drop-fix';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
@@ -882,6 +882,12 @@ function imageFilesFromDataTransfer(dataTransfer) {
     .filter((file) => file.type.startsWith('image/'));
 }
 
+function hasImageInDataTransfer(dataTransfer) {
+  return imageFilesFromDataTransfer(dataTransfer).length > 0
+    || Array.from(dataTransfer?.items ?? [])
+      .some((item) => item.kind === 'file' && item.type.startsWith('image/'));
+}
+
 function dataUrlFromFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -979,11 +985,19 @@ function insertImageNode(contentRoot, figure, event = null) {
 async function insertImageFiles(files, contentRoot, statusRoot, session, article, event = null) {
   for (const file of files) {
     statusRoot.textContent = `uploading image: ${file.name}`;
-    const optimized = await optimizedImageFile(file);
-    const uploadResult = await uploadPostImage(optimized, {
-      accessToken: session?.access_token,
-      slug: article?.slug || slugify(article?.title)
-    });
+    let optimized = file;
+    let uploadResult;
+
+    try {
+      optimized = await optimizedImageFile(file);
+      uploadResult = await uploadPostImage(optimized, {
+        accessToken: session?.access_token,
+        slug: article?.slug || slugify(article?.title)
+      });
+    } catch (error) {
+      statusRoot.textContent = `image upload failed: ${error?.message ?? 'browser-upload-error'}`;
+      continue;
+    }
 
     if (!uploadResult.ok) {
       statusRoot.textContent = `image upload failed: ${uploadResult.reason}`;
@@ -997,7 +1011,7 @@ async function insertImageFiles(files, contentRoot, statusRoot, session, article
 
 function attachImageDrop(contentRoot, statusRoot, session, article) {
   contentRoot.addEventListener('dragover', (event) => {
-    if (!imageFilesFromDataTransfer(event.dataTransfer).length) return;
+    if (!hasImageInDataTransfer(event.dataTransfer)) return;
     event.preventDefault();
     contentRoot.classList.add('is-dragging');
   });

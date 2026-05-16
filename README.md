@@ -36,3 +36,5 @@ Safe live setup:
 - Apply `supabase/schema.sql` in the Supabase SQL Editor.
 - Copy only the public browser key, such as `sb_publishable_...` or the legacy anon key, into `SUPABASE_PUBLISHABLE_KEY`.
 - Do not copy `service_role`, `sb_secret_...`, database passwords, or access tokens into this repo.
+
+Image uploads use the public `post-images` Supabase Storage bucket created by `supabase/schema.sql`. If the editor says `storage-bucket-missing`, the Storage part of the schema has not been applied to the live Supabase project yet.

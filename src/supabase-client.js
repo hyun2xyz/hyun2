@@ -42,6 +42,14 @@ function publicStorageUrl(path) {
   return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${storagePathUrl(path)}`;
 }
 
+async function storageFailureReason(response) {
+  const body = await response.json().catch(() => ({}));
+  const message = String(body.message ?? body.error ?? '').toLowerCase();
+  if (message.includes('bucket not found')) return 'storage-bucket-missing';
+  if (message.includes('row-level security') || message.includes('policy')) return 'storage-policy-blocked';
+  return `storage-http-${response.status}`;
+}
+
 function uniqueSlug(slug) {
   const safeSlug = String(slug || 'post')
     .trim()
@@ -342,7 +350,7 @@ export async function uploadPostImage(file, { accessToken, slug = 'untitled' } =
   });
 
   if (!response.ok) {
-    return { ok: false, reason: `storage-http-${response.status}`, image: null };
+    return { ok: false, reason: await storageFailureReason(response), image: null };
   }
 
   return {
