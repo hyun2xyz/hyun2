@@ -7,11 +7,12 @@ import {
   refreshSession,
   savePostWithSession,
   signInWithPassword
-} from './supabase-client.js?v=20260516-editor-tools';
+} from './supabase-client.js?v=20260516-polish-tools';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
 const THEME_KEY = 'hyun2.theme';
+const LANG_KEY = 'hyun2.lang';
 const TYPE_SETTINGS_KEY = 'hyun2.typeSettings';
 const DEFAULT_TYPE_SETTINGS = {
   titleSizePt: 44,
@@ -91,6 +92,13 @@ function sanitizeInlineHtml(html) {
       return;
     }
 
+    if (node.tagName === 'SPAN' && node.style.textDecoration.includes('underline')) {
+      const underline = document.createElement('u');
+      underline.append(...Array.from(node.childNodes));
+      node.replaceWith(underline);
+      return;
+    }
+
     if (node.tagName === 'A') {
       const href = sanitizeLinkUrl(node.getAttribute('href'));
       Array.from(node.attributes).forEach((attribute) => node.removeAttribute(attribute.name));
@@ -141,6 +149,12 @@ function clampLineHeight(value, fallback) {
   return Math.min(3, Math.max(1, next));
 }
 
+function normalizeBlockLineHeight(value) {
+  const next = Number.parseFloat(value);
+  if (!Number.isFinite(next)) return null;
+  return String(Math.min(3, Math.max(1, next)));
+}
+
 function clampIndentPt(value, fallback) {
   const next = Number.parseFloat(value);
   if (!Number.isFinite(next)) return fallback;
@@ -175,12 +189,14 @@ function normalizeBlocks(blocks, fallbackBody = '') {
 
       const html = block?.html ? sanitizeInlineHtml(block.html) : '';
       const text = String(block?.text ?? (html ? textFromHtml(html) : '')).trim();
+      const lineHeight = normalizeBlockLineHeight(block?.lineHeight);
       if (!text && !html.replace(/<br\s*\/?>/gi, '').trim()) return null;
 
       return {
         type: 'text',
         text,
-        ...(html ? { html } : {})
+        ...(html ? { html } : {}),
+        ...(lineHeight ? { lineHeight } : {})
       };
     })
     .filter(Boolean);
@@ -278,15 +294,33 @@ function currentTheme() {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+function currentLang() {
+  const lang = document.documentElement.dataset.lang;
+  if (lang === 'en' || lang === 'ko') return lang;
+  try {
+    return localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'ko';
+  } catch {
+    return 'ko';
+  }
+}
+
+function setLang(lang) {
+  const next = lang === 'en' ? 'en' : 'ko';
+  document.documentElement.dataset.lang = next;
+  localStorage.setItem(LANG_KEY, next);
+  updateTopControls();
+}
+
 function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem(THEME_KEY, theme);
+  updateTopControls();
 }
 
 function toggleTheme() {
   setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
   document.querySelectorAll('[data-action="theme"]').forEach((button) => {
-    button.textContent = themeButtonLabel();
+    button.textContent = button.dataset.theme ? themeLabel(button.dataset.theme) : themeButtonLabel();
   });
 }
 
@@ -294,11 +328,49 @@ function themeButtonLabel() {
   return currentTheme() === 'dark' ? 'light' : 'dark';
 }
 
+function themeLabel(theme, lang = currentLang()) {
+  const dark = lang === 'en' ? 'DA' : '다';
+  const light = lang === 'en' ? 'LA' : '라';
+  return theme === 'dark' ? dark : light;
+}
+
+function updateTopControls(root = document) {
+  root.querySelectorAll('[data-action="lang"]').forEach((button) => {
+    const active = button.dataset.lang === currentLang();
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+
+  root.querySelectorAll('[data-action="theme"]').forEach((button) => {
+    if (button.dataset.theme) {
+      const active = button.dataset.theme === currentTheme();
+      button.textContent = themeLabel(button.dataset.theme);
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    } else {
+      button.textContent = themeButtonLabel();
+    }
+  });
+}
+
 function attachThemeToggle(root = document) {
   root.querySelectorAll('[data-action="theme"]').forEach((button) => {
-    button.textContent = themeButtonLabel();
-    button.addEventListener('click', toggleTheme);
+    button.textContent = button.dataset.theme ? themeLabel(button.dataset.theme) : themeButtonLabel();
+    button.addEventListener('click', () => {
+      if (button.dataset.theme) {
+        setTheme(button.dataset.theme);
+      } else {
+        toggleTheme();
+      }
+    });
   });
+}
+
+function attachLangToggle(root = document) {
+  root.querySelectorAll('[data-action="lang"]').forEach((button) => {
+    button.addEventListener('click', () => setLang(button.dataset.lang));
+  });
+  updateTopControls(root);
 }
 
 function decodeBase64Url(value) {
@@ -408,7 +480,11 @@ function imageBlockMarkup(block) {
 
 function blockMarkup(block) {
   if (block.type === 'image') return imageBlockMarkup(block);
-  return `<p>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
+  const lineHeight = normalizeBlockLineHeight(block.lineHeight);
+  const lineAttrs = lineHeight
+    ? ` style="line-height: ${escapeHtml(lineHeight)}" data-line-height="${escapeHtml(lineHeight)}"`
+    : '';
+  return `<p${lineAttrs}>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
 }
 
 function articleMarkup(article, options = {}) {
@@ -450,6 +526,17 @@ function renderReaderIndex(posts, selectedSlug) {
         `).join('')}
       </nav>
     </aside>
+  `;
+}
+
+function renderTopControls() {
+  return `
+    <div class="top-controls" aria-label="언어와 테마">
+      <button type="button" data-action="lang" data-lang="ko" aria-label="한국어">한</button>
+      <button type="button" data-action="lang" data-lang="en" aria-label="English">EN</button>
+      <button type="button" data-action="theme" data-theme="dark" aria-label="dark">${themeLabel('dark')}</button>
+      <button type="button" data-action="theme" data-theme="light" aria-label="light">${themeLabel('light')}</button>
+    </div>
   `;
 }
 
@@ -501,10 +588,13 @@ function renderIndexPage(posts = []) {
         `).join('')}
       </nav>
     </section>
+    ${renderTopControls()}
     ${topButtonMarkup()}
   `;
 
   attachTopButton(root);
+  attachThemeToggle(root);
+  attachLangToggle(root);
 }
 
 function dedupePostTitles(posts) {
@@ -530,9 +620,11 @@ function renderReader(article, posts = []) {
         ${articleMarkup(view)}
       </article>
     </div>
+    ${renderTopControls()}
     ${topButtonMarkup()}
   `;
   attachThemeToggle(root);
+  attachLangToggle(root);
   attachTopButton(root);
   attachNoteDots(root);
 }
@@ -602,7 +694,15 @@ function editorBlocksFromDom() {
 
       const text = node.innerText.trim();
       const html = sanitizeInlineHtml(node.innerHTML).trim();
-      return text || html ? { type: 'text', text, ...(html ? { html } : {}) } : null;
+      const lineHeight = normalizeBlockLineHeight(node.dataset.lineHeight || node.style.lineHeight);
+      return text || html
+        ? {
+            type: 'text',
+            text,
+            ...(html ? { html } : {}),
+            ...(lineHeight ? { lineHeight } : {})
+          }
+        : null;
     })
     .filter(Boolean);
 }
@@ -746,10 +846,14 @@ function placeCaretAfter(node) {
   selection.addRange(range);
 }
 
-function insertInlineNode(contentRoot, node) {
+function insertInlineNode(contentRoot, node, options = {}) {
   const range = selectionRangeIn(contentRoot);
   if (range) {
-    range.deleteContents();
+    if (options.replaceSelection) {
+      range.deleteContents();
+    } else {
+      range.collapse(false);
+    }
     range.insertNode(node);
     placeCaretAfter(node);
     return;
@@ -773,8 +877,33 @@ function insertNoteDot(contentRoot, statusRoot) {
   const value = window.prompt('각주 내용이나 링크를 입력하세요.');
   if (value === null) return;
 
-  insertInlineNode(contentRoot, noteDotElement(value));
+  insertInlineNode(contentRoot, noteDotElement(value), { replaceSelection: false });
   statusRoot.textContent = 'note dot added. save to publish.';
+}
+
+function selectedParagraphs(contentRoot) {
+  const range = selectionRangeIn(contentRoot);
+  if (!range) return [];
+
+  return Array.from(contentRoot.querySelectorAll('p'))
+    .filter((paragraph) => range.intersectsNode(paragraph));
+}
+
+function applySelectedLineHeight(contentRoot, statusRoot) {
+  const input = document.querySelector('[name="selectedLineHeight"]');
+  const next = normalizeBlockLineHeight(input?.value);
+  const paragraphs = selectedParagraphs(contentRoot);
+
+  if (!next || !paragraphs.length) {
+    statusRoot.textContent = 'drag paragraph text first, then apply line.';
+    return;
+  }
+
+  paragraphs.forEach((paragraph) => {
+    paragraph.style.lineHeight = next;
+    paragraph.dataset.lineHeight = next;
+  });
+  statusRoot.textContent = 'selected paragraph line height applied. save to publish.';
 }
 
 function underlineSelection(contentRoot, statusRoot) {
@@ -795,6 +924,10 @@ function attachEditorFormatting(root, contentRoot, statusRoot) {
 
   root.querySelector('[data-action="note"]')?.addEventListener('click', () => {
     insertNoteDot(contentRoot, statusRoot);
+  });
+
+  root.querySelector('[data-action="apply-line"]')?.addEventListener('click', () => {
+    applySelectedLineHeight(contentRoot, statusRoot);
   });
 }
 
@@ -906,7 +1039,6 @@ async function renderEditor(options = {}) {
       <aside class="admin-index" data-panel="index" aria-label="글 목차">
         <div class="admin-index__bar">
           <span>index</span>
-          <button type="button" data-action="new">new</button>
         </div>
         <nav>
           ${renderAdminIndex(posts, article.slug)}
@@ -915,12 +1047,21 @@ async function renderEditor(options = {}) {
 
       <section class="editor" data-panel="editor">
         <div class="editor__bar">
+          <button type="button" data-action="new">new</button>
           <button type="button" data-action="save">save</button>
-          <button type="button" data-action="underline">underline</button>
-          <button type="button" data-action="note">note</button>
-          <a href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
+          <a class="button-link" href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
           <button type="button" data-action="theme" hidden>${themeButtonLabel()}</button>
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
+        </div>
+
+        <div class="editor__tools" data-panel="tools" aria-label="글 수정 도구">
+          <button class="tool-button" type="button" data-action="underline" title="선택한 글자에 밑줄">U</button>
+          <button class="tool-button note-tool" type="button" data-action="note" title="선택한 글자 옆에 각주나 링크 점 추가">o</button>
+          <label class="line-tool" title="선택한 단락 행간">
+            line
+            <input name="selectedLineHeight" type="number" min="1" max="3" step="0.05" value="${style.bodyLineHeight}">
+          </label>
+          <button class="tool-button" type="button" data-action="apply-line" title="선택한 단락에 행간 적용">lh</button>
         </div>
 
         <div class="editor__settings" data-panel="settings" aria-label="글자 설정">
