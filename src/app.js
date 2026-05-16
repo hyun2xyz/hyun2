@@ -579,13 +579,20 @@ function attachNoteDots(root) {
 
 function attachReaderChromeDissolve(root) {
   const chrome = root.querySelectorAll('.reader-chrome');
+  const topButton = root.querySelector('[data-action="top"]');
   if (!chrome.length) return;
 
   let lastY = window.scrollY;
   let timer = 0;
 
-  const show = () => chrome.forEach((element) => element.classList.remove('is-dissolved'));
-  const hide = () => chrome.forEach((element) => element.classList.add('is-dissolved'));
+  const show = () => {
+    chrome.forEach((element) => element.classList.remove('is-dissolved'));
+    topButton?.classList.remove('is-visible');
+  };
+  const hide = () => {
+    chrome.forEach((element) => element.classList.add('is-dissolved'));
+    topButton?.classList.add('is-visible');
+  };
 
   window.addEventListener('scroll', () => {
     window.clearTimeout(timer);

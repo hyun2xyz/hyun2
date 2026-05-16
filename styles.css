@@ -327,12 +327,23 @@ input {
   right: 14px;
   bottom: 14px;
   z-index: 5;
-  display: block;
-  min-width: 18px;
-  min-height: 18px;
-  padding: 0 4px;
+  display: inline;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
   font-size: 0.52rem;
+  color: var(--fg);
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  opacity: 0;
+  transition: opacity 140ms ease;
+  pointer-events: none;
+}
+
+.to-top-button.is-visible {
   opacity: 0.34;
+  pointer-events: auto;
 }
 
 .to-top-button:hover,

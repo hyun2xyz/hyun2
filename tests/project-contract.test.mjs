@@ -125,6 +125,8 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /reader-chrome/);
   assert.match(app, /attachReaderChromeDissolve/);
   assert.match(app, /setTimeout\(hide,\s*160\)/);
+  assert.match(app, /topButton\?\.classList\.add\('is-visible'\)/);
+  assert.match(app, /topButton\?\.classList\.remove\('is-visible'\)/);
   assert.match(app, /data-line-height/);
   assert.match(app, /sanitizeInlineHtml/);
   assert.match(app, /block\.html/);
@@ -135,6 +137,9 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /\.reader-layout[\s\S]*display:\s*block/);
   assert.doesNotMatch(css, /display:\s*grid|grid-template/);
   assert.match(css, /\.to-top-button/);
+  assert.match(css, /\.to-top-button[\s\S]*border:\s*0/);
+  assert.match(css, /\.to-top-button[\s\S]*opacity:\s*0/);
+  assert.match(css, /\.to-top-button\.is-visible[\s\S]*opacity:\s*0\.34/);
   assert.match(css, /position:\s*fixed/);
   assert.match(css, /@media \(max-width:\s*720px\)/);
   assert.match(css, /\.top-controls/);
