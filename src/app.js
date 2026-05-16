@@ -487,11 +487,9 @@ function setCurrentArticle(article) {
 
 function applyTypeStyle(container, settings) {
   const style = normalizeTypeSettings(settings);
-  const paragraphGap = Math.max(0.35, style.bodyLineHeight * 0.55).toFixed(2);
   container.style.setProperty('--title-size', `${style.titleSizePt}pt`);
   container.style.setProperty('--body-size', `${style.bodySizePt}pt`);
   container.style.setProperty('--body-line-height', style.bodyLineHeight);
-  container.style.setProperty('--paragraph-gap', `${paragraphGap}em`);
   container.style.setProperty('--paragraph-indent', `${style.indentPt}pt`);
 }
 

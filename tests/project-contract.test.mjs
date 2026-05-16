@@ -102,7 +102,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /reader is updated/);
   assert.match(app, /dedupePostTitles/);
   assert.match(css, /--body-line-height/);
-  assert.match(css, /--paragraph-gap/);
+  assert.match(css, /\.article__body p \+ p,[\s\S]*margin-top:\s*0/);
   assert.match(css, /--paragraph-indent/);
   assert.match(css, /\.article__body p:first-of-type[\s\S]*text-indent:\s*0/);
   assert.match(css, /\.article-image--wrap/);
@@ -112,7 +112,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /data-theme="dark"/);
   assert.match(css, /#0645ff|#06f|blue/i);
   assert.match(css, /Gowun Batang/);
-  assert.match(app, /--paragraph-gap/);
+  assert.doesNotMatch(app, /--paragraph-gap/);
   assert.doesNotMatch(app, /supabase ready/);
 });
 

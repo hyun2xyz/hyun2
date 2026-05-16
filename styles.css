@@ -206,7 +206,7 @@ input {
 .article__body p + p,
 .article__body p + .article-image,
 .article-image + p {
-  margin-top: var(--paragraph-gap, 1rem);
+  margin-top: 0;
 }
 
 .article__body u {
