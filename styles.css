@@ -368,7 +368,7 @@ input {
 }
 
 .reader-chrome {
-  transition: opacity 420ms ease;
+  transition: opacity 140ms ease;
 }
 
 .reader-chrome.is-dissolved {
@@ -531,13 +531,24 @@ input {
 
 @media (max-width: 720px) {
   .site-shell {
-    padding-top: 42px;
+    padding-top: 18px;
   }
 
-  .reader-layout,
   .admin-layout {
     flex-direction: column;
     gap: 28px;
+  }
+
+  .top-controls {
+    position: static;
+    justify-content: flex-end;
+    margin-bottom: 22px;
+  }
+
+  .reader-index {
+    position: static;
+    width: 100%;
+    margin-bottom: 34px;
   }
 
   .admin-index {

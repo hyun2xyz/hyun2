@@ -124,6 +124,7 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.doesNotMatch(app, /selectedParagraphs/);
   assert.match(app, /reader-chrome/);
   assert.match(app, /attachReaderChromeDissolve/);
+  assert.match(app, /setTimeout\(hide,\s*160\)/);
   assert.match(app, /data-line-height/);
   assert.match(app, /sanitizeInlineHtml/);
   assert.match(app, /block\.html/);
@@ -137,6 +138,9 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /position:\s*fixed/);
   assert.match(css, /@media \(max-width:\s*720px\)/);
   assert.match(css, /\.top-controls/);
+  assert.match(css, /transition:\s*opacity 140ms ease/);
+  assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*\.top-controls[\s\S]*position:\s*static/);
+  assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*\.reader-index[\s\S]*position:\s*static/);
   assert.match(css, /\.button-link/);
   assert.match(css, /\.editor__tools/);
   assert.match(css, /\.tool-button/);

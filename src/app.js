@@ -592,8 +592,8 @@ function attachReaderChromeDissolve(root) {
     const nextY = window.scrollY;
     if (nextY <= 24 || nextY < lastY) {
       show();
-    } else if (nextY > 90) {
-      timer = window.setTimeout(hide, 650);
+    } else if (nextY > 36) {
+      timer = window.setTimeout(hide, 160);
     }
     lastY = nextY;
   }, { passive: true });
@@ -642,13 +642,13 @@ function renderReader(article, posts = []) {
   applyTypeStyle(root, view.style);
 
   root.innerHTML = `
+    ${renderTopControls('reader-chrome')}
     <div class="reader-layout">
       ${renderReaderIndex(posts, view.slug)}
       <article class="reader-article">
         ${articleMarkup(view)}
       </article>
     </div>
-    ${renderTopControls('reader-chrome')}
     ${topButtonMarkup()}
   `;
   attachThemeToggle(root);
