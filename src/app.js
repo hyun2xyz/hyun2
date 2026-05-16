@@ -1233,6 +1233,28 @@ function contentWithMeta(post, metaPatch = {}) {
   });
 }
 
+function adminDropTargetAfter(group, pointerY, source) {
+  return Array.from(group.querySelectorAll('.index-link:not(.is-dragging)'))
+    .filter((button) => button !== source)
+    .find((button) => {
+      const rect = button.getBoundingClientRect();
+      return pointerY < rect.top + rect.height / 2;
+    }) ?? null;
+}
+
+async function persistAdminIndexOrder(group, postMap, session) {
+  const buttons = Array.from(group.querySelectorAll('.index-link'));
+  const updates = buttons.map((item, index) => {
+    const post = postMap.get(item.dataset.slug);
+    if (!post?.id || !session?.access_token) return Promise.resolve({ ok: true });
+    post.sort_order = index;
+    post.content = contentWithMeta(post, { sortOrder: index });
+    return updatePostContent(post.id, post.content, session.access_token);
+  });
+
+  return Promise.all(updates);
+}
+
 function attachAdminIndexDrag(root, posts, session, statusRoot) {
   const postMap = new Map(posts.map((post) => [post.slug, post]));
   let draggedSlug = '';
@@ -1240,34 +1262,34 @@ function attachAdminIndexDrag(root, posts, session, statusRoot) {
   root.querySelectorAll('.index-link[draggable="true"]').forEach((button) => {
     button.addEventListener('dragstart', (event) => {
       draggedSlug = button.dataset.slug;
+      button.classList.add('is-dragging');
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', draggedSlug);
     });
 
-    button.addEventListener('dragover', (event) => {
+    button.addEventListener('dragend', () => {
+      button.classList.remove('is-dragging');
+      draggedSlug = '';
+    });
+  });
+
+  root.querySelectorAll('.admin-index__items').forEach((group) => {
+    group.addEventListener('dragover', (event) => {
+      const source = root.querySelector(`.index-link[data-slug="${CSS.escape(draggedSlug)}"]`);
+      if (!source || source.closest('[data-index-group]') !== group) return;
+
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
+      group.insertBefore(source, adminDropTargetAfter(group, event.clientY, source));
     });
 
-    button.addEventListener('drop', async (event) => {
-      event.preventDefault();
+    group.addEventListener('drop', async (event) => {
       const source = root.querySelector(`.index-link[data-slug="${CSS.escape(draggedSlug)}"]`);
-      const target = event.currentTarget;
-      const sourceGroup = source?.closest('[data-index-group]');
-      const targetGroup = target.closest('[data-index-group]');
-      if (!source || !target || source === target || sourceGroup !== targetGroup) return;
+      if (!source || source.closest('[data-index-group]') !== group) return;
 
-      targetGroup.insertBefore(source, target);
-      const buttons = Array.from(targetGroup.querySelectorAll('.index-link'));
-      const updates = buttons.map((item, index) => {
-        const post = postMap.get(item.dataset.slug);
-        if (!post?.id || !session?.access_token) return Promise.resolve({ ok: true });
-        post.sort_order = index;
-        post.content = contentWithMeta(post, { sortOrder: index });
-        return updatePostContent(post.id, post.content, session.access_token);
-      });
-
-      const results = await Promise.all(updates);
+      event.preventDefault();
+      source.classList.remove('is-dragging');
+      const results = await persistAdminIndexOrder(group, postMap, session);
       statusRoot.textContent = results.every((result) => result.ok)
         ? 'menu order saved.'
         : 'menu order changed locally, but Supabase order save failed.';

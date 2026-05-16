@@ -90,6 +90,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /data-index-group="\$\{group\}"/);
   assert.match(app, /updatePostContent/);
   assert.match(app, /menu order saved/);
+  assert.match(app, /querySelectorAll\('\.admin-index__items'\)/);
+  assert.match(app, /adminDropTargetAfter/);
+  assert.match(app, /persistAdminIndexOrder/);
   assert.match(app, /localStorage/);
   assert.match(client, /\/auth\/v1\/token\?grant_type=password/);
   assert.match(client, /savePost/);
