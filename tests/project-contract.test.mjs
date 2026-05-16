@@ -184,6 +184,7 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.doesNotMatch(css, /\.editor__tools/);
   assert.match(css, /\.editor__inline-tools/);
   assert.match(css, /\.text-tool/);
+  assert.match(css, /\.editor__settings[\s\S]*border-top:\s*0/);
   assert.match(css, /\.editor__inline-tools[\s\S]*padding-top:\s*0/);
   assert.match(css, /\.text-tool[\s\S]*font-size:\s*inherit/);
   assert.match(css, /\.note-dot/);

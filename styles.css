@@ -520,7 +520,7 @@ input {
   row-gap: 12px;
   margin-bottom: 28px;
   padding-top: 14px;
-  border-top: 1px solid var(--line);
+  border-top: 0;
 }
 
 .editor__settings label {
