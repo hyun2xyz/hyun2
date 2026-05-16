@@ -119,6 +119,7 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /note-dot/);
   assert.match(app, /data-note/);
   assert.match(app, /data-url/);
+  assert.doesNotMatch(app, /title="\$\{escapeHtml\(url \|\| note \|\| '각주'\)\}"/);
   assert.match(app, /lineHeight/);
   assert.doesNotMatch(app, /data-action="apply-line"/);
   assert.doesNotMatch(app, /selectedParagraphs/);
@@ -140,6 +141,9 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /\.to-top-button/);
   assert.match(css, /\.to-top-button[\s\S]*border:\s*0/);
   assert.match(css, /\.to-top-button[\s\S]*opacity:\s*0/);
+  assert.match(css, /\.to-top-button[\s\S]*right:\s*20px/);
+  assert.match(css, /\.to-top-button[\s\S]*bottom:\s*20px/);
+  assert.match(css, /\.to-top-button[\s\S]*font-size:\s*0\.58rem/);
   assert.match(css, /\.to-top-button\.is-visible[\s\S]*opacity:\s*0\.34/);
   assert.match(css, /position:\s*fixed/);
   assert.match(css, /@media \(max-width:\s*720px\)/);
@@ -154,6 +158,8 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /\.note-dot/);
   assert.match(css, /color:\s*#1c7fb8/);
   assert.match(css, /content:\s*"ㅇ"/);
+  assert.match(css, /font-size:\s*0\.36em/);
+  assert.match(css, /\.note-dot:hover,[\s\S]*outline:\s*0/);
   assert.match(css, /\.note-dot\.is-open::after/);
   assert.match(css, /text-decoration-style:\s*solid/);
   assert.match(css, /\.index-page[\s\S]*justify-content:\s*center/);

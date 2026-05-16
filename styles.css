@@ -224,9 +224,9 @@ input {
 .note-dot {
   position: relative;
   display: inline-flex;
-  width: 0.72em;
-  min-width: 0.72em;
-  height: 0.72em;
+  width: 0.52em;
+  min-width: 0.52em;
+  height: 0.52em;
   min-height: 0;
   align-items: center;
   justify-content: center;
@@ -239,7 +239,7 @@ input {
   border-radius: 0;
   box-shadow: none;
   opacity: 0.72;
-  transform: translate(-0.16em, -0.08em);
+  transform: translate(-0.12em, -0.06em);
 }
 
 .note-dot::before {
@@ -248,7 +248,7 @@ input {
     "Noto Sans KR",
     Arial,
     sans-serif;
-  font-size: 0.72em;
+  font-size: 0.36em;
   line-height: 1;
   content: "ㅇ";
 }
@@ -257,8 +257,7 @@ input {
 .note-dot:focus {
   color: var(--accent);
   background: transparent;
-  outline: 1px solid var(--fg);
-  outline-offset: 2px;
+  outline: 0;
 }
 
 .note-dot.is-open::after {
@@ -324,14 +323,14 @@ input {
 
 .to-top-button {
   position: fixed;
-  right: 14px;
-  bottom: 14px;
+  right: 20px;
+  bottom: 20px;
   z-index: 5;
   display: inline;
   min-width: 0;
   min-height: 0;
   padding: 0;
-  font-size: 0.52rem;
+  font-size: 0.58rem;
   color: var(--fg);
   text-decoration: none;
   background: transparent;

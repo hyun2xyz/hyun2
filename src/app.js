@@ -71,7 +71,7 @@ function textFromHtml(html) {
 }
 
 function noteDotMarkup(note = '', url = '') {
-  return `<button class="note-dot" type="button" contenteditable="false" data-note="${escapeHtml(note)}" data-url="${escapeHtml(url)}" aria-label="각주" title="${escapeHtml(url || note || '각주')}"></button>`;
+  return `<button class="note-dot" type="button" contenteditable="false" data-note="${escapeHtml(note)}" data-url="${escapeHtml(url)}" aria-label="각주"></button>`;
 }
 
 function sanitizeInlineHtml(html) {
