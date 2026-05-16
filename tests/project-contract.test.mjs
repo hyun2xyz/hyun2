@@ -89,6 +89,37 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.doesNotMatch(app, /supabase ready/);
 });
 
+test('reader and editor support index-only, mobile top, word wrapping, annotations, and underline marks', async () => {
+  const app = await file('src/app.js');
+  const css = await file('styles.css');
+
+  assert.match(app, /routeParams\.has\('index'\)/);
+  assert.match(app, /renderIndexPage/);
+  assert.match(app, /href="\.\/\?index"/);
+  assert.match(app, /data-action="top"/);
+  assert.match(app, /scrollTo\(\{\s*top:\s*0,\s*behavior:\s*'smooth'/);
+  assert.match(app, /data-action="theme" hidden/);
+  assert.match(app, /data-action="underline"/);
+  assert.match(app, /execCommand\('underline'\)/);
+  assert.match(app, /data-action="note"/);
+  assert.match(app, /note-dot/);
+  assert.match(app, /data-note/);
+  assert.match(app, /data-url/);
+  assert.match(app, /sanitizeInlineHtml/);
+  assert.match(app, /block\.html/);
+  assert.match(app, /window\.prompt/);
+  assert.match(css, /word-break:\s*keep-all/);
+  assert.match(css, /overflow-wrap:\s*anywhere/);
+  assert.match(css, /\.to-top-button/);
+  assert.match(css, /position:\s*fixed/);
+  assert.match(css, /@media \(max-width:\s*720px\)/);
+  assert.match(css, /\.theme-button\[hidden\]/);
+  assert.match(css, /\.note-dot/);
+  assert.match(css, /background:\s*#6af04d/);
+  assert.match(css, /\.note-dot\.is-open::after/);
+  assert.match(css, /text-decoration-style:\s*wavy/);
+});
+
 test('database schema enables RLS and public readers only see published posts', async () => {
   const schema = await file('supabase/schema.sql');
 

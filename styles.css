@@ -56,6 +56,10 @@ a {
   color: var(--fg);
 }
 
+.index-heading {
+  text-decoration: none;
+}
+
 button {
   background: var(--bg);
   border: 1px solid var(--line);
@@ -146,6 +150,11 @@ input {
   padding: 2px 6px;
 }
 
+.theme-button[hidden],
+.editor__bar [data-action="theme"][hidden] {
+  display: none;
+}
+
 .editor__note,
 .editor__status,
 .editor__bar {
@@ -179,14 +188,21 @@ input {
   font-size: var(--body-size, 20pt);
   line-height: var(--body-line-height, 1.85);
   text-align: left;
-  word-break: normal;
-  overflow-wrap: break-word;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-break: strict;
   hyphens: auto;
 }
 
 .article__body p {
   margin: 0;
   text-indent: var(--paragraph-indent, 0pt);
+}
+
+.article__body u {
+  text-decoration-thickness: 1px;
+  text-decoration-style: wavy;
+  text-underline-offset: 0.14em;
 }
 
 .article-image {
@@ -197,6 +213,75 @@ input {
   display: block;
   max-width: 100%;
   height: auto;
+}
+
+.note-dot {
+  position: relative;
+  display: inline-block;
+  width: 0.55em;
+  min-width: 0.55em;
+  height: 0.55em;
+  min-height: 0;
+  padding: 0;
+  margin: 0 0.16em;
+  vertical-align: super;
+  background: #6af04d;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.note-dot:hover,
+.note-dot:focus {
+  background: #6af04d;
+  outline: 1px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.note-dot.is-open::after {
+  position: absolute;
+  left: 50%;
+  bottom: 140%;
+  z-index: 4;
+  width: max-content;
+  max-width: min(260px, 70vw);
+  padding: 6px 8px;
+  color: var(--bg);
+  white-space: normal;
+  text-indent: 0;
+  content: attr(data-note);
+  background: var(--fg);
+  border: 1px solid var(--fg);
+  transform: translateX(-50%);
+}
+
+.index-page {
+  width: min(100%, 720px);
+  margin: 0 auto;
+}
+
+.index-page h1 {
+  margin: 0 0 28px;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.index-page nav {
+  display: grid;
+  gap: 12px;
+}
+
+.to-top-button {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 5;
+  display: none;
 }
 
 .editor {
@@ -311,7 +396,7 @@ input {
   margin-top: 24px;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 720px) {
   .site-shell {
     padding-top: 42px;
   }
@@ -327,6 +412,12 @@ input {
     position: static;
   }
 
+  .to-top-button {
+    display: block;
+  }
+}
+
+@media (max-width: 520px) {
   .editor__settings {
     grid-template-columns: 1fr;
   }

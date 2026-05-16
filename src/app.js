@@ -7,7 +7,7 @@ import {
   refreshSession,
   savePostWithSession,
   signInWithPassword
-} from './supabase-client.js?v=20260514-2205';
+} from './supabase-client.js?v=20260516-editor-tools';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
@@ -37,6 +37,8 @@ const routeParams = new URLSearchParams(window.location.search);
 const isAdminPage = document.body.dataset.admin === 'true'
   || routeParams.has('edit')
   || routeParams.has('admin');
+const isIndexPage = routeParams.has('index')
+  || routeParams.get('view') === 'index';
 
 function splitParagraphs(content) {
   if (Array.isArray(content)) return content;
@@ -53,6 +55,69 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function sanitizeLinkUrl(value) {
+  const url = String(value ?? '').trim();
+  if (/^https?:\/\//i.test(url) || /^mailto:/i.test(url)) return url;
+  return '';
+}
+
+function textFromHtml(html) {
+  const template = document.createElement('template');
+  template.innerHTML = String(html ?? '');
+  return template.content.textContent?.trim() ?? '';
+}
+
+function noteDotMarkup(note = '', url = '') {
+  return `<button class="note-dot" type="button" contenteditable="false" data-note="${escapeHtml(note)}" data-url="${escapeHtml(url)}" aria-label="각주" title="${escapeHtml(url || note || '각주')}"></button>`;
+}
+
+function sanitizeInlineHtml(html) {
+  const template = document.createElement('template');
+  template.innerHTML = String(html ?? '');
+
+  const sanitizeNode = (node) => {
+    Array.from(node.childNodes).forEach(sanitizeNode);
+    if (!(node instanceof HTMLElement)) return;
+
+    if (node.tagName === 'BR') {
+      Array.from(node.attributes).forEach((attribute) => node.removeAttribute(attribute.name));
+      return;
+    }
+
+    if (node.tagName === 'U') {
+      Array.from(node.attributes).forEach((attribute) => node.removeAttribute(attribute.name));
+      return;
+    }
+
+    if (node.tagName === 'A') {
+      const href = sanitizeLinkUrl(node.getAttribute('href'));
+      Array.from(node.attributes).forEach((attribute) => node.removeAttribute(attribute.name));
+      if (!href) {
+        node.replaceWith(document.createTextNode(node.textContent ?? ''));
+        return;
+      }
+      node.setAttribute('href', href);
+      node.setAttribute('target', '_blank');
+      node.setAttribute('rel', 'noopener noreferrer');
+      return;
+    }
+
+    if (node.tagName === 'BUTTON' && node.classList.contains('note-dot')) {
+      const note = String(node.dataset.note ?? '').trim();
+      const url = sanitizeLinkUrl(node.dataset.url);
+      const next = document.createElement('template');
+      next.innerHTML = noteDotMarkup(note, url);
+      node.replaceWith(next.content.firstElementChild);
+      return;
+    }
+
+    node.replaceWith(document.createTextNode(node.textContent ?? ''));
+  };
+
+  sanitizeNode(template.content);
+  return template.innerHTML;
 }
 
 function slugify(value) {
@@ -108,8 +173,15 @@ function normalizeBlocks(blocks, fallbackBody = '') {
         };
       }
 
-      const text = String(block?.text ?? '').trim();
-      return text ? { type: 'text', text } : null;
+      const html = block?.html ? sanitizeInlineHtml(block.html) : '';
+      const text = String(block?.text ?? (html ? textFromHtml(html) : '')).trim();
+      if (!text && !html.replace(/<br\s*\/?>/gi, '').trim()) return null;
+
+      return {
+        type: 'text',
+        text,
+        ...(html ? { html } : {})
+      };
     })
     .filter(Boolean);
 }
@@ -117,7 +189,7 @@ function normalizeBlocks(blocks, fallbackBody = '') {
 function textFromBlocks(blocks) {
   return normalizeBlocks(blocks)
     .filter((block) => block.type === 'text')
-    .map((block) => block.text)
+    .map((block) => block.text || textFromHtml(block.html))
     .join('\n\n');
 }
 
@@ -336,7 +408,7 @@ function imageBlockMarkup(block) {
 
 function blockMarkup(block) {
   if (block.type === 'image') return imageBlockMarkup(block);
-  return `<p>${escapeHtml(block.text)}</p>`;
+  return `<p>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
 }
 
 function articleMarkup(article, options = {}) {
@@ -367,8 +439,8 @@ function renderReaderIndex(posts, selectedSlug) {
   return `
     <aside class="reader-index" data-panel="index" aria-label="글 목차">
       <div class="index-title">
-        <span>index</span>
-        <button class="theme-button" type="button" data-action="theme">${themeButtonLabel()}</button>
+        <a class="index-heading" href="./?index">index</a>
+        <button class="theme-button" type="button" data-action="theme" hidden>${themeButtonLabel()}</button>
       </div>
       <nav>
         ${posts.map((post) => `
@@ -379,6 +451,60 @@ function renderReaderIndex(posts, selectedSlug) {
       </nav>
     </aside>
   `;
+}
+
+function topButtonMarkup() {
+  return '<button class="to-top-button" type="button" data-action="top" aria-label="맨 위로">top</button>';
+}
+
+function attachTopButton(root) {
+  root.querySelector('[data-action="top"]')?.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
+
+function attachNoteDots(root) {
+  if (root.dataset.noteDotsAttached === 'true') return;
+  root.dataset.noteDotsAttached = 'true';
+
+  root.addEventListener('click', (event) => {
+    const dot = event.target.closest?.('.note-dot');
+    if (!dot || !root.contains(dot)) {
+      root.querySelectorAll('.note-dot.is-open').forEach((openDot) => openDot.classList.remove('is-open'));
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const url = sanitizeLinkUrl(dot.dataset.url);
+    if (url) {
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+
+    root.querySelectorAll('.note-dot.is-open').forEach((openDot) => {
+      if (openDot !== dot) openDot.classList.remove('is-open');
+    });
+    dot.classList.toggle('is-open');
+  });
+}
+
+function renderIndexPage(posts = []) {
+  const root = document.querySelector('#article-root');
+
+  root.innerHTML = `
+    <section class="index-page" aria-label="전체 목차">
+      <h1>index</h1>
+      <nav>
+        ${posts.map((post) => `
+          <a href="./?post=${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a>
+        `).join('')}
+      </nav>
+    </section>
+    ${topButtonMarkup()}
+  `;
+
+  attachTopButton(root);
 }
 
 function dedupePostTitles(posts) {
@@ -404,8 +530,11 @@ function renderReader(article, posts = []) {
         ${articleMarkup(view)}
       </article>
     </div>
+    ${topButtonMarkup()}
   `;
   attachThemeToggle(root);
+  attachTopButton(root);
+  attachNoteDots(root);
 }
 
 function renderLogin(statusText = '') {
@@ -472,7 +601,8 @@ function editorBlocksFromDom() {
       }
 
       const text = node.innerText.trim();
-      return text ? { type: 'text', text } : null;
+      const html = sanitizeInlineHtml(node.innerHTML).trim();
+      return text || html ? { type: 'text', text, ...(html ? { html } : {}) } : null;
     })
     .filter(Boolean);
 }
@@ -595,6 +725,79 @@ function attachImageDrop(contentRoot, statusRoot) {
   });
 }
 
+function selectionRangeIn(contentRoot) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+
+  const range = selection.getRangeAt(0);
+  const container = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+    ? range.commonAncestorContainer
+    : range.commonAncestorContainer.parentElement;
+
+  return container && contentRoot.contains(container) ? range : null;
+}
+
+function placeCaretAfter(node) {
+  const range = document.createRange();
+  const selection = window.getSelection();
+  range.setStartAfter(node);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function insertInlineNode(contentRoot, node) {
+  const range = selectionRangeIn(contentRoot);
+  if (range) {
+    range.deleteContents();
+    range.insertNode(node);
+    placeCaretAfter(node);
+    return;
+  }
+
+  const paragraph = contentRoot.querySelector('p:last-of-type') ?? document.createElement('p');
+  if (!paragraph.parentElement) contentRoot.append(paragraph);
+  paragraph.append(' ', node, ' ');
+  placeCaretAfter(node);
+}
+
+function noteDotElement(value) {
+  const raw = String(value ?? '').trim();
+  const url = sanitizeLinkUrl(raw);
+  const template = document.createElement('template');
+  template.innerHTML = noteDotMarkup(url ? '' : raw, url);
+  return template.content.firstElementChild;
+}
+
+function insertNoteDot(contentRoot, statusRoot) {
+  const value = window.prompt('각주 내용이나 링크를 입력하세요.');
+  if (value === null) return;
+
+  insertInlineNode(contentRoot, noteDotElement(value));
+  statusRoot.textContent = 'note dot added. save to publish.';
+}
+
+function underlineSelection(contentRoot, statusRoot) {
+  const range = selectionRangeIn(contentRoot);
+  if (!range || range.collapsed) {
+    statusRoot.textContent = 'drag text first, then press underline.';
+    return;
+  }
+
+  document.execCommand('underline');
+  statusRoot.textContent = 'underline added. save to publish.';
+}
+
+function attachEditorFormatting(root, contentRoot, statusRoot) {
+  root.querySelector('[data-action="underline"]')?.addEventListener('click', () => {
+    underlineSelection(contentRoot, statusRoot);
+  });
+
+  root.querySelector('[data-action="note"]')?.addEventListener('click', () => {
+    insertNoteDot(contentRoot, statusRoot);
+  });
+}
+
 function saveFailureMessage(reason) {
   if (reason === 'no-returned-row') {
     return 'no row updated. Run supabase/schema.sql in Supabase SQL Editor.';
@@ -713,8 +916,10 @@ async function renderEditor(options = {}) {
       <section class="editor" data-panel="editor">
         <div class="editor__bar">
           <button type="button" data-action="save">save</button>
+          <button type="button" data-action="underline">underline</button>
+          <button type="button" data-action="note">note</button>
           <a href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
-          <button type="button" data-action="theme">${themeButtonLabel()}</button>
+          <button type="button" data-action="theme" hidden>${themeButtonLabel()}</button>
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
         </div>
 
@@ -745,7 +950,11 @@ async function renderEditor(options = {}) {
   `;
 
   attachThemeToggle(root);
-  attachImageDrop(root.querySelector('[data-field="content"]'), root.querySelector('.editor__status'));
+  const contentRoot = root.querySelector('[data-field="content"]');
+  const statusRoot = root.querySelector('.editor__status');
+  attachImageDrop(contentRoot, statusRoot);
+  attachEditorFormatting(root, contentRoot, statusRoot);
+  attachNoteDots(root);
 
   root.querySelectorAll('[name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"]').forEach((input) => {
     input.addEventListener('input', () => {
@@ -827,7 +1036,7 @@ async function renderPublicPage() {
   let posts = local.slug ? [{ title: local.title, slug: local.slug, status: local.status }] : [];
 
   const [postResult, titleResult] = await Promise.all([
-    requestedSlug ? getPostBySlug(requestedSlug) : getLatestPublishedPost(),
+    isIndexPage ? Promise.resolve({ ok: false, post: null }) : requestedSlug ? getPostBySlug(requestedSlug) : getLatestPublishedPost(),
     listPostTitles()
   ]);
 
@@ -838,6 +1047,11 @@ async function renderPublicPage() {
 
   if (titleResult.ok) {
     posts = dedupePostTitles(titleResult.posts);
+  }
+
+  if (isIndexPage) {
+    renderIndexPage(posts);
+    return;
   }
 
   renderReader(article, posts);
