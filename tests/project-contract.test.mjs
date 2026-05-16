@@ -164,6 +164,8 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /text-decoration-style:\s*solid/);
   assert.match(css, /\.index-page[\s\S]*justify-content:\s*center/);
   assert.match(css, /\.index-page__row[\s\S]*justify-content:\s*space-between/);
+  assert.match(css, /\.index-page__row[\s\S]*text-decoration:\s*none/);
+  assert.match(css, /\.index-page__row:hover,[\s\S]*color:\s*var\(--accent\)/);
 });
 
 test('database schema enables RLS and public readers only see published posts', async () => {
