@@ -6,8 +6,9 @@ import {
   listPostTitles,
   refreshSession,
   savePostWithSession,
-  signInWithPassword
-} from './supabase-client.js?v=20260516-publish-trash';
+  signInWithPassword,
+  uploadPostImage
+} from './supabase-client.js?v=20260516-storage-images';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
@@ -180,10 +181,15 @@ function normalizeBlocks(blocks, fallbackBody = '') {
   return blocks
     .map((block) => {
       if (block?.type === 'image' && block.src) {
+        const width = Number.parseFloat(block.width);
         return {
           type: 'image',
           src: String(block.src),
-          alt: String(block.alt ?? '')
+          alt: String(block.alt ?? ''),
+          ...(block.path ? { path: String(block.path) } : {}),
+          width: Number.isFinite(width) ? Math.min(100, Math.max(18, width)) : 100,
+          align: ['left', 'right', 'center'].includes(block.align) ? block.align : 'center',
+          wrap: Boolean(block.wrap)
         };
       }
 
@@ -474,16 +480,38 @@ function formatDate(value) {
   }).format(date);
 }
 
-function imageBlockMarkup(block) {
+function imageBlockMarkup(block, options = {}) {
+  const width = Number.isFinite(Number.parseFloat(block.width)) ? Number.parseFloat(block.width) : 100;
+  const align = ['left', 'right', 'center'].includes(block.align) ? block.align : 'center';
+  const wrap = Boolean(block.wrap);
   return `
-    <figure class="article-image" data-block-type="image" contenteditable="false">
+    <figure
+      class="article-image ${wrap ? 'article-image--wrap' : ''}"
+      data-block-type="image"
+      data-width="${escapeHtml(width)}"
+      data-align="${escapeHtml(align)}"
+      data-wrap="${wrap ? 'true' : 'false'}"
+      ${block.path ? `data-path="${escapeHtml(block.path)}"` : ''}
+      style="--image-width: ${escapeHtml(width)}%; --image-align: ${escapeHtml(align)};"
+      contenteditable="false"
+    >
       <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}">
+      ${options.editable ? `
+        <div class="image-tools" aria-label="이미지 조정">
+          <button type="button" data-image-action="smaller" title="작게">-</button>
+          <button type="button" data-image-action="larger" title="크게">+</button>
+          <button type="button" data-image-action="left" title="왼쪽">L</button>
+          <button type="button" data-image-action="center" title="가운데">C</button>
+          <button type="button" data-image-action="right" title="오른쪽">R</button>
+          <button type="button" data-image-action="wrap" title="글 감싸기">wrap</button>
+        </div>
+      ` : ''}
     </figure>
   `;
 }
 
-function blockMarkup(block) {
-  if (block.type === 'image') return imageBlockMarkup(block);
+function blockMarkup(block, options = {}) {
+  if (block.type === 'image') return imageBlockMarkup(block, options);
   const lineHeight = normalizeBlockLineHeight(block.lineHeight);
   const lineAttrs = lineHeight
     ? ` style="line-height: ${escapeHtml(lineHeight)}" data-line-height="${escapeHtml(lineHeight)}"`
@@ -500,7 +528,7 @@ function articleMarkup(article, options = {}) {
     <h1 class="article__title">${escapeHtml(view.title)}</h1>
     ${date ? `<time class="article__date" datetime="${escapeHtml(view.published_at ?? view.updated_at)}">${escapeHtml(date)}</time>` : ''}
     <div class="article__body">
-      ${blocks.map(blockMarkup).join('')}
+      ${blocks.map((block) => blockMarkup(block, options)).join('')}
       ${options.editable && !blocks.length ? '<p><br></p>' : ''}
     </div>
   `;
@@ -723,7 +751,17 @@ function editorBlocksFromDom() {
 
       if (node.matches('[data-block-type="image"]')) {
         const image = node.querySelector('img');
-        return image?.src ? { type: 'image', src: image.src, alt: image.alt } : null;
+        return image?.src
+          ? {
+              type: 'image',
+              src: image.src,
+              alt: image.alt,
+              ...(node.dataset.path ? { path: node.dataset.path } : {}),
+              width: Number.parseFloat(node.dataset.width) || 100,
+              align: node.dataset.align || 'center',
+              wrap: node.dataset.wrap === 'true'
+            }
+          : null;
       }
 
       const text = node.innerText.trim();
@@ -791,16 +829,66 @@ function dataUrlFromFile(file) {
   });
 }
 
-function imageFigureFromFile(src, file) {
+function canvasBlob(canvas, type, quality) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+  });
+}
+
+async function optimizedImageFile(file) {
+  if (/image\/(gif|svg\+xml)/.test(file.type)) return file;
+
+  const src = await dataUrlFromFile(file);
+  const image = new Image();
+  await new Promise((resolve, reject) => {
+    image.addEventListener('load', resolve, { once: true });
+    image.addEventListener('error', reject, { once: true });
+    image.src = src;
+  });
+
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext('2d');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const webp = await canvasBlob(canvas, 'image/webp', 0.86);
+  const blob = webp || await canvasBlob(canvas, 'image/jpeg', 0.86);
+  if (!blob) return file;
+
+  const name = file.name.replace(/\.[^.]+$/, '') || 'image';
+  return new File([blob], `${name}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, { type: blob.type });
+}
+
+function applyImageFigureSettings(figure) {
+  const width = Math.min(100, Math.max(18, Number.parseFloat(figure.dataset.width) || 100));
+  const align = ['left', 'right', 'center'].includes(figure.dataset.align) ? figure.dataset.align : 'center';
+  const wrap = figure.dataset.wrap === 'true';
+  figure.dataset.width = String(width);
+  figure.dataset.align = align;
+  figure.dataset.wrap = wrap ? 'true' : 'false';
+  figure.style.setProperty('--image-width', `${width}%`);
+  figure.style.setProperty('--image-align', align);
+  figure.classList.toggle('article-image--wrap', wrap);
+}
+
+function imageFigureFromUpload(uploaded, file) {
   const figure = document.createElement('figure');
   figure.className = 'article-image';
   figure.dataset.blockType = 'image';
+  figure.dataset.width = '100';
+  figure.dataset.align = 'center';
+  figure.dataset.wrap = 'false';
+  if (uploaded.path) figure.dataset.path = uploaded.path;
   figure.contentEditable = 'false';
 
   const image = document.createElement('img');
-  image.src = src;
-  image.alt = file.name || 'uploaded image';
+  image.src = uploaded.src;
+  image.alt = uploaded.alt || file.name || 'uploaded image';
   figure.append(image);
+  applyImageFigureSettings(figure);
 
   return figure;
 }
@@ -826,14 +914,26 @@ function insertImageNode(contentRoot, figure, event = null) {
   contentRoot.insertBefore(paragraph, figure.nextSibling);
 }
 
-async function insertImageFiles(files, contentRoot, event = null) {
+async function insertImageFiles(files, contentRoot, statusRoot, session, article, event = null) {
   for (const file of files) {
-    const src = await dataUrlFromFile(file);
-    insertImageNode(contentRoot, imageFigureFromFile(src, file), event);
+    statusRoot.textContent = `uploading image: ${file.name}`;
+    const optimized = await optimizedImageFile(file);
+    const uploadResult = await uploadPostImage(optimized, {
+      accessToken: session?.access_token,
+      slug: article?.slug || slugify(article?.title)
+    });
+
+    if (!uploadResult.ok) {
+      statusRoot.textContent = `image upload failed: ${uploadResult.reason}`;
+      continue;
+    }
+
+    insertImageNode(contentRoot, imageFigureFromUpload(uploadResult.image, optimized), event);
+    statusRoot.textContent = 'image uploaded. save to publish.';
   }
 }
 
-function attachImageDrop(contentRoot, statusRoot) {
+function attachImageDrop(contentRoot, statusRoot, session, article) {
   contentRoot.addEventListener('dragover', (event) => {
     if (!imageFilesFromDataTransfer(event.dataTransfer).length) return;
     event.preventDefault();
@@ -850,8 +950,7 @@ function attachImageDrop(contentRoot, statusRoot) {
 
     event.preventDefault();
     contentRoot.classList.remove('is-dragging');
-    await insertImageFiles(files, contentRoot, event);
-    statusRoot.textContent = 'image added. save to publish.';
+    await insertImageFiles(files, contentRoot, statusRoot, session, article, event);
   });
 
   contentRoot.addEventListener('paste', async (event) => {
@@ -859,8 +958,7 @@ function attachImageDrop(contentRoot, statusRoot) {
     if (!files.length) return;
 
     event.preventDefault();
-    await insertImageFiles(files, contentRoot);
-    statusRoot.textContent = 'image added. save to publish.';
+    await insertImageFiles(files, contentRoot, statusRoot, session, article);
   });
 }
 
@@ -938,6 +1036,27 @@ function attachEditorFormatting(root, contentRoot, statusRoot) {
 
   root.querySelector('[data-action="note"]')?.addEventListener('click', () => {
     insertNoteDot(contentRoot, statusRoot);
+  });
+}
+
+function attachImageControls(root, statusRoot) {
+  root.addEventListener('click', (event) => {
+    const action = event.target.closest?.('[data-image-action]')?.dataset.imageAction;
+    const figure = event.target.closest?.('[data-block-type="image"]');
+    if (!action || !figure || !root.contains(figure)) return;
+
+    if (action === 'smaller') {
+      figure.dataset.width = String(Math.max(18, (Number.parseFloat(figure.dataset.width) || 100) - 10));
+    } else if (action === 'larger') {
+      figure.dataset.width = String(Math.min(100, (Number.parseFloat(figure.dataset.width) || 100) + 10));
+    } else if (action === 'left' || action === 'right' || action === 'center') {
+      figure.dataset.align = action;
+    } else if (action === 'wrap') {
+      figure.dataset.wrap = figure.dataset.wrap === 'true' ? 'false' : 'true';
+    }
+
+    applyImageFigureSettings(figure);
+    statusRoot.textContent = 'image layout changed. save to publish.';
   });
 }
 
@@ -1112,7 +1231,7 @@ async function renderEditor(options = {}) {
         </div>
 
         <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(article.title)}</h1>
-        <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${normalizeArticle(article).blocks.map(blockMarkup).join('') || '<p><br></p>'}</div>
+        <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${normalizeArticle(article).blocks.map((block) => blockMarkup(block, { editable: true })).join('') || '<p><br></p>'}</div>
         <p class="editor__status">${escapeHtml(options.statusText ?? '')}</p>
       </section>
     </div>
@@ -1121,8 +1240,9 @@ async function renderEditor(options = {}) {
   attachThemeToggle(root);
   const contentRoot = root.querySelector('[data-field="content"]');
   const statusRoot = root.querySelector('.editor__status');
-  attachImageDrop(contentRoot, statusRoot);
+  attachImageDrop(contentRoot, statusRoot, session, article);
   attachEditorFormatting(root, contentRoot, statusRoot);
+  attachImageControls(root, statusRoot);
   attachNoteDots(root);
 
   root.querySelector('[data-action="publish"]').addEventListener('click', (event) => {

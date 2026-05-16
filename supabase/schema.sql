@@ -55,6 +55,48 @@ with check ((select auth.uid()) is not null and (author_id is null or author_id 
 create index if not exists posts_status_published_at_idx
 on public.posts (status, published_at desc);
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'post-images',
+  'post-images',
+  true,
+  52428800,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+on conflict (id) do update
+set public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "post images are readable by anyone" on storage.objects;
+create policy "post images are readable by anyone"
+on storage.objects
+for select
+to anon, authenticated
+using (bucket_id = 'post-images');
+
+drop policy if exists "authenticated users can upload post images" on storage.objects;
+create policy "authenticated users can upload post images"
+on storage.objects
+for insert
+to authenticated
+with check (bucket_id = 'post-images' and (select auth.uid()) is not null);
+
+drop policy if exists "authenticated users can update post images" on storage.objects;
+create policy "authenticated users can update post images"
+on storage.objects
+for update
+to authenticated
+using (bucket_id = 'post-images' and (select auth.uid()) is not null)
+with check (bucket_id = 'post-images' and (select auth.uid()) is not null);
+
+drop policy if exists "authenticated users can delete post images" on storage.objects;
+create policy "authenticated users can delete post images"
+on storage.objects
+for delete
+to authenticated
+using (bucket_id = 'post-images' and (select auth.uid()) is not null);
+
 insert into public.posts (title, slug, excerpt, content, status, published_at)
 values (
   '가안: 가운데에 놓인 글',

@@ -3,6 +3,7 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase-config.js';
 const POSTS_ENDPOINT = `${SUPABASE_URL}/rest/v1/posts`;
 const AUTH_TOKEN_ENDPOINT = `${SUPABASE_URL}/auth/v1/token?grant_type=password`;
 const AUTH_REFRESH_ENDPOINT = `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`;
+const STORAGE_BUCKET = 'post-images';
 const PUBLISHED_STATUS_QUERY = 'status=eq.published';
 const upsertPreferHeader = 'resolution=merge-duplicates,return=representation';
 const POST_SELECT = 'id,author_id,title,slug,content,excerpt,status,published_at,updated_at';
@@ -28,6 +29,17 @@ function authHeaders(accessToken, extra = {}) {
     Accept: 'application/json',
     ...extra
   };
+}
+
+function storagePathUrl(path) {
+  return String(path)
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+}
+
+function publicStorageUrl(path) {
+  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${storagePathUrl(path)}`;
 }
 
 function uniqueSlug(slug) {
@@ -303,5 +315,43 @@ export async function savePostWithSession(post, session, fetchImpl = fetch) {
     ...result,
     reason: result.ok && result.reason === 'saved' ? 'saved-after-refresh' : result.reason,
     session: refreshed.session
+  };
+}
+
+export async function uploadPostImage(file, { accessToken, slug = 'untitled' } = {}, fetchImpl = fetch) {
+  if (!hasSupabaseConfig() || !accessToken || !file) {
+    return { ok: false, reason: 'missing-upload-config', image: null };
+  }
+
+  const safeSlug = String(slug || 'untitled')
+    .trim()
+    .replace(/[^a-z0-9가-힣-]+/gi, '-')
+    .replace(/^-+|-+$/g, '') || 'untitled';
+  const extension = file.type === 'image/png' ? 'png' : 'webp';
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const path = `posts/${safeSlug}/${id}.${extension}`;
+  const url = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${storagePathUrl(path)}`;
+
+  const response = await fetchImpl(url, {
+    method: 'POST',
+    headers: authHeaders(accessToken, {
+      'Content-Type': file.type || 'application/octet-stream',
+      'x-upsert': 'false'
+    }),
+    body: file
+  });
+
+  if (!response.ok) {
+    return { ok: false, reason: `storage-http-${response.status}`, image: null };
+  }
+
+  return {
+    ok: true,
+    reason: 'uploaded',
+    image: {
+      path,
+      src: publicStorageUrl(path),
+      alt: file.name || 'uploaded image'
+    }
   };
 }

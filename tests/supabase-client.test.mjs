@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { refreshSession, savePost, savePostWithSession } from '../src/supabase-client.js';
+import { refreshSession, savePost, savePostWithSession, uploadPostImage } from '../src/supabase-client.js';
 
 const article = {
   id: '4d6d6594-0b48-4301-bac3-1965b3b38aa5',
@@ -177,4 +177,39 @@ test('savePostWithSession refreshes an expired token and retries the save', asyn
   assert.equal(calls.length, 3);
   assert.match(calls[1].url, /grant_type=refresh_token/);
   assert.equal(calls[2].auth, 'Bearer fresh-access-token');
+});
+
+test('uploadPostImage stores images in the post-images bucket and returns a public URL', async () => {
+  let request;
+  const file = new Blob(['image'], { type: 'image/webp' });
+  file.name = 'hello.webp';
+
+  const result = await uploadPostImage(file, {
+    accessToken: 'access-token',
+    slug: 'hello post'
+  }, async (url, options) => {
+    request = {
+      url: String(url),
+      method: options.method,
+      auth: options.headers.Authorization,
+      contentType: options.headers['Content-Type'],
+      upsert: options.headers['x-upsert'],
+      body: options.body
+    };
+
+    return new Response(JSON.stringify({ Key: 'post-images/posts/hello-post/image.webp' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(request.method, 'POST');
+  assert.equal(request.auth, 'Bearer access-token');
+  assert.equal(request.contentType, 'image/webp');
+  assert.equal(request.upsert, 'false');
+  assert.equal(request.body, file);
+  assert.match(request.url, /\/storage\/v1\/object\/post-images\/posts\/hello-post\/.+\.webp$/);
+  assert.match(result.image.path, /^posts\/hello-post\/.+\.webp$/);
+  assert.match(result.image.src, /\/storage\/v1\/object\/public\/post-images\/posts\/hello-post\/.+\.webp$/);
 });

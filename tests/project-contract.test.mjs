@@ -61,7 +61,10 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /contenteditable="true"/);
   assert.match(app, /insertImageFiles/);
   assert.match(app, /data-block-type="image"/);
-  assert.match(app, /FileReader/);
+  assert.match(app, /uploadPostImage/);
+  assert.match(app, /optimizedImageFile/);
+  assert.match(app, /data-image-action="wrap"/);
+  assert.match(app, /image layout changed/);
   assert.match(app, /data-action="save"/);
   assert.match(app, /data-action="theme"/);
   assert.match(app, /savePostWithSession/);
@@ -76,6 +79,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /localStorage/);
   assert.match(client, /\/auth\/v1\/token\?grant_type=password/);
   assert.match(client, /savePost/);
+  assert.match(client, /uploadPostImage/);
+  assert.match(client, /\/storage\/v1\/object\/\$\{STORAGE_BUCKET\}/);
   assert.match(client, /upsert/);
   assert.match(client, /no-returned-row/);
   assert.match(client, /saved-as-new-row/);
@@ -85,6 +90,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /--body-line-height/);
   assert.match(css, /--paragraph-gap/);
   assert.match(css, /--paragraph-indent/);
+  assert.match(css, /\.article-image--wrap/);
+  assert.match(css, /float:\s*left/);
+  assert.match(css, /\.image-tools/);
   assert.match(css, /hyphens:\s*auto/);
   assert.match(css, /data-theme="dark"/);
   assert.match(css, /#0645ff|#06f|blue/i);
@@ -180,6 +188,10 @@ test('database schema enables RLS and public readers only see published posts', 
   assert.match(schema, /auth\.uid\(\)/i);
   assert.match(schema, /set_post_updated_at/i);
   assert.match(schema, /authenticated users can manage posts/i);
+  assert.match(schema, /insert into storage\.buckets/i);
+  assert.match(schema, /post-images/i);
+  assert.match(schema, /post images are readable by anyone/i);
+  assert.match(schema, /authenticated users can upload post images/i);
 });
 
 test('GitHub push can deploy the static site through Pages actions', async () => {
