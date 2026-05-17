@@ -16,6 +16,7 @@ const SESSION_KEY = 'hyun2.supabaseSession';
 const THEME_KEY = 'hyun2.theme';
 const LANG_KEY = 'hyun2.lang';
 const TYPE_SETTINGS_KEY = 'hyun2.typeSettings';
+const HYUN2_IMAGE_MOVE_TYPE = 'application/x-hyun2-image-move';
 const DEFAULT_TYPE_SETTINGS = {
   titleSizePt: 44,
   bodySizePt: 20,
@@ -542,10 +543,11 @@ function imageBlockMarkup(block, options = {}) {
       data-align="${escapeHtml(align)}"
       data-wrap="${wrap ? 'true' : 'false'}"
       ${block.path ? `data-path="${escapeHtml(block.path)}"` : ''}
+      ${options.editable ? 'draggable="true"' : ''}
       style="--image-width: ${escapeHtml(width)}%; --image-align: ${escapeHtml(align)};"
       contenteditable="false"
     >
-      <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}">
+      <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}" draggable="false">
       ${options.editable ? '<button class="image-resize-handle" type="button" data-image-resize-handle aria-label="이미지 크기 조절"></button>' : ''}
     </figure>
   `;
@@ -1076,6 +1078,25 @@ function insertImageNode(contentRoot, figure, event = null) {
   contentRoot.insertBefore(paragraph, figure.nextSibling);
 }
 
+function moveExistingImageBlock(contentRoot, figure, event) {
+  const reference = dropReferenceBlock(contentRoot, event);
+  if (reference === figure) return;
+
+  if (!reference) {
+    contentRoot.append(figure);
+  } else {
+    const rect = reference.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+    contentRoot.insertBefore(figure, before ? reference : reference.nextSibling);
+  }
+
+  if (!figure.nextElementSibling?.matches('p')) {
+    const paragraph = document.createElement('p');
+    paragraph.append(document.createElement('br'));
+    contentRoot.insertBefore(paragraph, figure.nextSibling);
+  }
+}
+
 async function insertImageFiles(files, contentRoot, statusRoot, session, article, event = null) {
   for (const file of files) {
     statusRoot.textContent = `uploading image: ${file.name}`;
@@ -1105,6 +1126,13 @@ async function insertImageFiles(files, contentRoot, statusRoot, session, article
 
 function attachImageDrop(contentRoot, statusRoot, session, article) {
   contentRoot.addEventListener('dragover', (event) => {
+    if (event.dataTransfer?.types?.includes(HYUN2_IMAGE_MOVE_TYPE)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      contentRoot.classList.add('is-dragging');
+      return;
+    }
+
     if (!hasImageInDataTransfer(event.dataTransfer)) return;
     event.preventDefault();
     contentRoot.classList.add('is-dragging');
@@ -1115,6 +1143,19 @@ function attachImageDrop(contentRoot, statusRoot, session, article) {
   });
 
   contentRoot.addEventListener('drop', async (event) => {
+    if (event.dataTransfer?.types?.includes(HYUN2_IMAGE_MOVE_TYPE)) {
+      const id = event.dataTransfer.getData(HYUN2_IMAGE_MOVE_TYPE);
+      const figure = id ? contentRoot.querySelector(`[data-image-drag-id="${CSS.escape(id)}"]`) : null;
+      if (!figure) return;
+
+      event.preventDefault();
+      contentRoot.classList.remove('is-dragging');
+      moveExistingImageBlock(contentRoot, figure, event);
+      figure.removeAttribute('data-image-drag-id');
+      statusRoot.textContent = 'image moved. save to publish.';
+      return;
+    }
+
     const files = imageFilesFromDataTransfer(event.dataTransfer);
     if (!files.length) return;
 
@@ -1258,6 +1299,26 @@ function attachImageResizeDrag(root, contentRoot, statusRoot) {
   });
 }
 
+function attachImageMove(root, contentRoot) {
+  contentRoot.addEventListener('dragstart', (event) => {
+    const figure = event.target.closest?.('[data-block-type="image"]');
+    if (!figure || !contentRoot.contains(figure)) return;
+
+    const id = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now());
+    figure.dataset.imageDragId = id;
+    selectImageFigure(root, figure);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData(HYUN2_IMAGE_MOVE_TYPE, id);
+  });
+
+  contentRoot.addEventListener('dragend', () => {
+    contentRoot.querySelectorAll('[data-image-drag-id]').forEach((figure) => {
+      figure.removeAttribute('data-image-drag-id');
+    });
+    contentRoot.classList.remove('is-dragging');
+  });
+}
+
 function attachImageControls(root, contentRoot, statusRoot) {
   const panel = root.querySelector('[data-panel="image"]');
 
@@ -1300,6 +1361,7 @@ function attachImageControls(root, contentRoot, statusRoot) {
   });
 
   attachImageResizeDrag(root, contentRoot, statusRoot);
+  attachImageMove(root, contentRoot);
 }
 
 function saveFailureMessage(reason) {
@@ -1535,6 +1597,12 @@ async function renderEditor(options = {}) {
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
         </div>
 
+        <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(article.title)}</h1>
+        <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${articleBlocksMarkup(normalizeArticle(article).blocks, { editable: true }) || '<p><br></p>'}</div>
+        <p class="editor__status">${escapeHtml(options.statusText ?? '')}</p>
+      </section>
+
+      <aside class="editor-side-panel" data-panel="side" aria-label="편집 옵션">
         <div class="editor__settings" data-panel="settings" aria-label="글자 설정">
           <label>
             date
@@ -1562,22 +1630,18 @@ async function renderEditor(options = {}) {
           </div>
         </div>
 
-        <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(article.title)}</h1>
-        <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${articleBlocksMarkup(normalizeArticle(article).blocks, { editable: true }) || '<p><br></p>'}</div>
-        <p class="editor__status">${escapeHtml(options.statusText ?? '')}</p>
-      </section>
-
-      <aside class="image-panel image-tools" data-panel="image" aria-label="이미지 옵션" hidden>
-        <p>image</p>
-        <label>
-          size
-          <input name="imageWidth" type="range" min="18" max="100" step="1" value="100">
-        </label>
-        <div>
-          <button type="button" data-image-action="left">왼쪽</button>
-          <button type="button" data-image-action="center">가운데</button>
-          <button type="button" data-image-action="right">오른쪽</button>
-          <button type="button" data-image-action="wrap">감싸기</button>
+        <div class="image-panel image-tools" data-panel="image" aria-label="이미지 옵션" hidden>
+          <p>image</p>
+          <label>
+            size
+            <input name="imageWidth" type="range" min="18" max="100" step="1" value="100">
+          </label>
+          <div>
+            <button type="button" data-image-action="left">왼쪽</button>
+            <button type="button" data-image-action="center">가운데</button>
+            <button type="button" data-image-action="right">오른쪽</button>
+            <button type="button" data-image-action="wrap">감싸기</button>
+          </div>
         </div>
       </aside>
     </div>

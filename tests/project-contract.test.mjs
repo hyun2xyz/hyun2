@@ -76,8 +76,13 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /item\.kind === 'file'/);
   assert.match(app, /data-image-action="wrap"/);
   assert.match(app, /data-panel="image"/);
+  assert.match(app, /editor-side-panel/);
+  assert.match(app, /data-panel="side"/);
   assert.match(app, /image-resize-handle/);
   assert.match(app, /attachImageResizeDrag/);
+  assert.match(app, /attachImageMove/);
+  assert.match(app, /moveExistingImageBlock/);
+  assert.match(app, /HYUN2_IMAGE_MOVE_TYPE/);
   assert.match(app, /selectImageFigure/);
   assert.match(app, /syncImagePanel/);
   assert.match(app, /name="imageWidth"/);
@@ -133,7 +138,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.article-image--wrap/);
   assert.match(css, /float:\s*left/);
   assert.match(css, /\.image-panel/);
-  assert.match(css, /\.image-panel[\s\S]*position:\s*fixed/);
+  assert.match(css, /\.editor-side-panel/);
+  assert.match(css, /\.editor-side-panel[\s\S]*position:\s*fixed/);
   assert.match(css, /\.image-resize-handle/);
   assert.match(css, /\.article-image\.is-selected/);
   assert.match(css, /\.admin-layout[\s\S]*margin:\s*0 auto/);
