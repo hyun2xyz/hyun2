@@ -270,6 +270,10 @@ input {
   margin-top: var(--image-gap);
 }
 
+.article__body p + .article-image--wrap {
+  margin-top: 0;
+}
+
 .article-image + p {
   margin-top: 0;
 }
@@ -325,12 +329,12 @@ input {
 
 .article-image--wrap[data-align="left"] {
   float: left;
-  margin: var(--image-gap) 1.2em var(--image-gap) 0;
+  margin: 0 1.2em 0 0;
 }
 
 .article-image--wrap[data-align="right"] {
   float: right;
-  margin: var(--image-gap) 0 var(--image-gap) 1.2em;
+  margin: 0 0 0 1.2em;
 }
 
 .article-image--wrap[data-align="center"] {
