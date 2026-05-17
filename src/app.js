@@ -95,6 +95,10 @@ function normalizeTextAlign(value) {
   return ['left', 'center', 'right'].includes(value) ? value : '';
 }
 
+function normalizeBlockIndent(value) {
+  return value === 'none' ? 'none' : '';
+}
+
 function textFromHtml(html) {
   const template = document.createElement('template');
   template.innerHTML = String(html ?? '');
@@ -243,6 +247,7 @@ function normalizeBlocks(blocks, fallbackBody = '') {
       const text = String(block?.text ?? (html ? textFromHtml(html) : '')).trim();
       const lineHeight = normalizeBlockLineHeight(block?.lineHeight);
       const align = normalizeTextAlign(block?.align);
+      const indent = normalizeBlockIndent(block?.indent);
       if (!text && !html.replace(/<br\s*\/?>/gi, '').trim()) return null;
 
       return {
@@ -250,7 +255,8 @@ function normalizeBlocks(blocks, fallbackBody = '') {
         text,
         ...(html ? { html } : {}),
         ...(lineHeight ? { lineHeight } : {}),
-        ...(align ? { align } : {})
+        ...(align ? { align } : {}),
+        ...(indent ? { indent } : {})
       };
     })
     .filter(Boolean);
@@ -573,14 +579,17 @@ function blockMarkup(block, options = {}) {
   if (block.type === 'image') return imageBlockMarkup(block, options);
   const lineHeight = normalizeBlockLineHeight(block.lineHeight);
   const align = normalizeTextAlign(block.align);
+  const indent = normalizeBlockIndent(block.indent);
   const styles = [
     lineHeight ? `line-height: ${escapeHtml(lineHeight)}` : '',
-    align ? `text-align: ${escapeHtml(align)}` : ''
+    align ? `text-align: ${escapeHtml(align)}` : '',
+    indent ? 'text-indent: 0' : ''
   ].filter(Boolean);
   const lineAttrs = [
     styles.length ? `style="${styles.join('; ')}"` : '',
     lineHeight ? `data-line-height="${escapeHtml(lineHeight)}"` : '',
-    align ? `data-align="${escapeHtml(align)}"` : ''
+    align ? `data-align="${escapeHtml(align)}"` : '',
+    indent ? `data-indent="${escapeHtml(indent)}"` : ''
   ].filter(Boolean).join(' ');
   const firstTextAttr = options.firstTextBlock ? ' data-first-text-block="true"' : '';
   return `<p${firstTextAttr}${lineAttrs ? ` ${lineAttrs}` : ''}>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
@@ -686,6 +695,12 @@ function attachNoteDots(root) {
   if (root.dataset.noteDotsAttached === 'true') return;
   root.dataset.noteDotsAttached = 'true';
 
+  root.addEventListener('dblclick', (event) => {
+    const dot = event.target.closest?.('.note-dot');
+    const url = dot && root.contains(dot) ? sanitizeLinkUrl(dot.dataset.url) : '';
+    if (url) window.open(url, '_blank', 'noopener');
+  });
+
   root.addEventListener('click', (event) => {
     const dot = event.target.closest?.('.note-dot');
     if (!dot || !root.contains(dot)) {
@@ -696,7 +711,8 @@ function attachNoteDots(root) {
     event.preventDefault();
     event.stopPropagation();
     const url = sanitizeLinkUrl(dot.dataset.url);
-    if (url) {
+    const note = String(dot.dataset.note ?? '').trim();
+    if (url && !note) {
       window.open(url, '_blank', 'noopener');
       return;
     }
@@ -899,13 +915,15 @@ function editorBlocksFromDom() {
       const html = sanitizeInlineHtml(node.innerHTML).trim();
       const lineHeight = normalizeBlockLineHeight(node.dataset.lineHeight || node.style.lineHeight);
       const align = normalizeTextAlign(node.dataset.align || node.style.textAlign);
+      const indent = normalizeBlockIndent(node.dataset.indent);
       return text || html
         ? {
             type: 'text',
             text,
             ...(html ? { html } : {}),
             ...(lineHeight ? { lineHeight } : {}),
-            ...(align ? { align } : {})
+            ...(align ? { align } : {}),
+            ...(indent ? { indent } : {})
           }
         : null;
     })
@@ -1332,10 +1350,14 @@ function noteDotElement(value) {
   return template.content.firstElementChild;
 }
 
-function hyperlinkNoteElement(url) {
+function hyperlinkNoteText(href, noteText) {
+  return String(noteText ?? '').trim() || href;
+}
+
+function hyperlinkNoteElement(url, noteText = '') {
   const href = normalizePromptedLinkUrl(url);
   const template = document.createElement('template');
-  template.innerHTML = noteDotMarkup(href, href);
+  template.innerHTML = noteDotMarkup(hyperlinkNoteText(href, noteText), href);
   return template.content.firstElementChild;
 }
 
@@ -1364,8 +1386,9 @@ function insertHyperlinkNote(contentRoot, statusRoot) {
     statusRoot.textContent = '주소를 다시 확인해 주세요. 예: example.com 또는 https://example.com';
     return;
   }
+  const noteText = window.prompt('각주처럼 뜰 텍스트를 입력하세요.', href);
 
-  insertInlineNode(contentRoot, hyperlinkNoteElement(href), { replaceSelection: false, beforeSelection: true });
+  insertInlineNode(contentRoot, hyperlinkNoteElement(href, noteText), { replaceSelection: false, beforeSelection: true });
   statusRoot.textContent = 'hyperlink note added. save to publish.';
 }
 
@@ -1389,9 +1412,17 @@ function alignSelectedBlocks(contentRoot, statusRoot, align) {
   statusRoot.textContent = `paragraph aligned ${nextAlign}. save to publish.`;
 }
 
+function removeIndentFromSelectedBlocks(contentRoot, statusRoot) {
+  selectedEditableBlocks(contentRoot).forEach((paragraph) => {
+    paragraph.dataset.indent = 'none';
+    paragraph.style.textIndent = '0px';
+  });
+  statusRoot.textContent = 'selected paragraph indent removed. save to publish.';
+}
+
 function attachEditorFormatting(root, contentRoot, statusRoot) {
   attachEditorSelectionMemory(contentRoot);
-  root.querySelectorAll('[data-action="underline"], [data-action="link"], [data-action^="align-"]').forEach((button) => {
+  root.querySelectorAll('[data-action="underline"], [data-action="link"], [data-action="indent-none"], [data-action^="align-"]').forEach((button) => {
     button.addEventListener('mousedown', (event) => {
       event.preventDefault();
       rememberEditorSelection(contentRoot);
@@ -1416,6 +1447,10 @@ function attachEditorFormatting(root, contentRoot, statusRoot) {
 
   root.querySelector('[data-action="align-right"]')?.addEventListener('click', () => {
     alignSelectedBlocks(contentRoot, statusRoot, 'right');
+  });
+
+  root.querySelector('[data-action="indent-none"]')?.addEventListener('click', () => {
+    removeIndentFromSelectedBlocks(contentRoot, statusRoot);
   });
 }
 
@@ -1781,13 +1816,26 @@ async function renderEditor(options = {}) {
             <span><input name="indentPt" type="number" min="0" max="120" step="1" value="${style.indentPt}"> pt</span>
           </label>
           <div class="editor__inline-tools" data-panel="tools" aria-label="글 수정 도구">
-            <button class="text-tool" type="button" data-action="underline" title="선택한 글자에 밑줄">밑줄</button>
-            <button class="text-tool" type="button" data-action="link" title="선택한 글자에 하이퍼링크">하이퍼링크</button>
+            <button class="text-tool icon-tool" type="button" data-action="underline" title="선택한 글자에 밑줄" aria-label="밑줄">
+              <span class="tool-icon tool-icon--underline" aria-hidden="true"></span>
+            </button>
+            <button class="text-tool icon-tool" type="button" data-action="link" title="하이퍼링크 각주" aria-label="하이퍼링크">
+              <span class="tool-icon tool-icon--link" aria-hidden="true"></span>
+            </button>
+            <button class="text-tool icon-tool" type="button" data-action="indent-none" title="선택한 단락 들여쓰기 제거" aria-label="들여쓰기 제거">
+              <span class="tool-icon tool-icon--indent-none" aria-hidden="true"></span>
+            </button>
           </div>
           <div class="editor-align-tools" aria-label="문단 정렬">
-            <button class="text-tool" type="button" data-action="align-left" title="선택한 단락 왼쪽 정렬">왼쪽</button>
-            <button class="text-tool" type="button" data-action="align-center" title="선택한 단락 가운데 정렬">중앙</button>
-            <button class="text-tool" type="button" data-action="align-right" title="선택한 단락 오른쪽 정렬">오른쪽</button>
+            <button class="text-tool icon-tool" type="button" data-action="align-left" title="선택한 단락 왼쪽 정렬" aria-label="왼쪽 정렬">
+              <span class="tool-icon tool-icon--align-left" aria-hidden="true"></span>
+            </button>
+            <button class="text-tool icon-tool" type="button" data-action="align-center" title="선택한 단락 가운데 정렬" aria-label="가운데 정렬">
+              <span class="tool-icon tool-icon--align-center" aria-hidden="true"></span>
+            </button>
+            <button class="text-tool icon-tool" type="button" data-action="align-right" title="선택한 단락 오른쪽 정렬" aria-label="오른쪽 정렬">
+              <span class="tool-icon tool-icon--align-right" aria-hidden="true"></span>
+            </button>
           </div>
         </div>
 

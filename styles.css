@@ -211,6 +211,10 @@ input {
   text-indent: 0;
 }
 
+.article__body p[data-indent="none"] {
+  text-indent: 0;
+}
+
 .article__body p[data-align="left"] {
   text-align: left;
 }
@@ -673,7 +677,7 @@ input {
 .editor__inline-tools {
   display: inline-flex;
   flex-basis: 100%;
-  align-items: baseline;
+  align-items: center;
   align-self: flex-end;
   gap: 10px;
   padding-top: 0;
@@ -683,7 +687,7 @@ input {
 .editor-align-tools {
   display: inline-flex;
   flex-basis: 100%;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   padding-bottom: 2px;
 }
@@ -698,6 +702,123 @@ input {
   background: transparent;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.icon-tool {
+  display: inline-flex;
+  width: 26px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  text-decoration: none;
+}
+
+.tool-icon {
+  position: relative;
+  display: inline-block;
+  width: 18px;
+  height: 16px;
+  color: currentColor;
+}
+
+.tool-icon::before,
+.tool-icon::after {
+  position: absolute;
+  display: block;
+  content: "";
+}
+
+.tool-icon--underline::before {
+  top: 2px;
+  left: 5px;
+  width: 8px;
+  height: 9px;
+  border-bottom: 1px solid currentColor;
+  font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  content: "U";
+}
+
+.tool-icon--link::before,
+.tool-icon--link::after {
+  width: 8px;
+  height: 5px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+}
+
+.tool-icon--link::before {
+  top: 4px;
+  left: 2px;
+  transform: rotate(-32deg);
+}
+
+.tool-icon--link::after {
+  right: 2px;
+  bottom: 4px;
+  transform: rotate(-32deg);
+}
+
+.tool-icon--indent-none::before {
+  top: 3px;
+  right: 1px;
+  width: 12px;
+  height: 1px;
+  background: currentColor;
+  box-shadow: 0 5px 0 currentColor, 0 10px 0 currentColor;
+}
+
+.tool-icon--indent-none::after {
+  top: 6px;
+  left: 1px;
+  border-top: 3px solid transparent;
+  border-right: 5px solid currentColor;
+  border-bottom: 3px solid transparent;
+}
+
+.tool-icon--align-left::before,
+.tool-icon--align-center::before,
+.tool-icon--align-right::before {
+  top: 2px;
+  height: 1px;
+  background: currentColor;
+}
+
+.tool-icon--align-left::after,
+.tool-icon--align-center::after,
+.tool-icon--align-right::after {
+  top: 7px;
+  width: 9px;
+  height: 1px;
+  background: currentColor;
+  box-shadow: 0 5px 0 currentColor;
+}
+
+.tool-icon--align-left::before {
+  left: 2px;
+  width: 14px;
+}
+
+.tool-icon--align-left::after {
+  left: 2px;
+}
+
+.tool-icon--align-center::before {
+  left: 2px;
+  width: 14px;
+}
+
+.tool-icon--align-center::after {
+  left: 5px;
+}
+
+.tool-icon--align-right::before {
+  right: 2px;
+  width: 14px;
+}
+
+.tool-icon--align-right::after {
+  right: 2px;
 }
 
 .text-tool:hover,
