@@ -100,8 +100,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /pointerup/);
   assert.match(app, /setPointerCapture/);
   assert.match(app, /image moved\. save to publish/);
-  assert.match(app, /dropRangeFromPoint/);
   assert.match(app, /insertImageAtDropPoint/);
+  assert.match(app, /insertImageAtParagraphBoundary/);
+  assert.doesNotMatch(app, /splitParagraphForImage/);
   assert.match(app, /image-drop-indicator/);
   assert.match(app, /clearSelectedImageFigure/);
   assert.match(app, /moveExistingImageBlock/);

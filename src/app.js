@@ -1267,57 +1267,14 @@ function imageUploadFailureMessage(reason) {
   return reason;
 }
 
-function dropRangeFromPoint(contentRoot, event) {
-  const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
-  if (range && rangeBelongsToContent(range, contentRoot)) return range;
-
-  const position = document.caretPositionFromPoint?.(event.clientX, event.clientY);
-  if (!position) return null;
-
-  const nextRange = document.createRange();
-  nextRange.setStart(position.offsetNode, position.offset);
-  nextRange.collapse(true);
-  return rangeBelongsToContent(nextRange, contentRoot) ? nextRange : null;
-}
-
 function dropReferenceBlock(contentRoot, event) {
   return document.elementsFromPoint(event.clientX, event.clientY)
     .find((element) => element.parentElement === contentRoot
       && (element.matches('p') || element.matches('[data-block-type="image"]')));
 }
 
-function ensureDropParagraph(paragraph) {
-  if (paragraph.textContent.trim() || paragraph.querySelector('.note-dot, u, br')) return paragraph;
-  paragraph.innerHTML = '<br>';
-  return paragraph;
-}
-
-function splitParagraphForImage(paragraph, range, figure) {
-  const afterRange = range.cloneRange();
-  afterRange.setEndAfter(paragraph.lastChild ?? paragraph);
-  const afterContent = afterRange.extractContents();
-  ensureDropParagraph(paragraph);
-
-  paragraph.after(figure);
-  if (afterContent.textContent.trim() || afterContent.querySelector?.('button, u, br')) {
-    const afterParagraph = paragraph.cloneNode(false);
-    afterParagraph.removeAttribute('data-first-text-block');
-    afterParagraph.append(afterContent);
-    figure.after(afterParagraph);
-  }
-}
-
 function insertImageAtDropPoint(contentRoot, figure, event = null) {
-  const range = event ? dropRangeFromPoint(contentRoot, event) : null;
-  const paragraph = range?.commonAncestorContainer?.nodeType === Node.ELEMENT_NODE
-    ? range.commonAncestorContainer.closest?.('p')
-    : range?.commonAncestorContainer?.parentElement?.closest?.('p');
-
-  if (paragraph && contentRoot.contains(paragraph)) {
-    splitParagraphForImage(paragraph, range, figure);
-  } else {
-    insertImageNode(contentRoot, figure, event);
-  }
+  insertImageAtParagraphBoundary(contentRoot, figure, event);
 
   if (!figure.nextElementSibling?.matches('p')) {
     const nextParagraph = document.createElement('p');
@@ -1326,7 +1283,7 @@ function insertImageAtDropPoint(contentRoot, figure, event = null) {
   }
 }
 
-function insertImageNode(contentRoot, figure, event = null) {
+function insertImageAtParagraphBoundary(contentRoot, figure, event = null) {
   const reference = event ? dropReferenceBlock(contentRoot, event) : null;
   if (!reference) {
     contentRoot.append(figure);
