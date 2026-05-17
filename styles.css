@@ -210,6 +210,7 @@ input {
 
 .article__body {
   display: block;
+  --image-gap: 0.55em;
   font-size: var(--body-size, 20pt);
   line-height: var(--body-line-height, 1.85);
   text-align: left;
@@ -266,11 +267,11 @@ input {
 }
 
 .article__body p + .article-image {
-  margin-top: 0.8em;
+  margin-top: var(--image-gap);
 }
 
 .article-image + p {
-  margin-top: 0.8em;
+  margin-top: 0;
 }
 
 .article__body u {
@@ -281,8 +282,8 @@ input {
 
 .article-image {
   position: relative;
-  margin-top: 0.8em;
-  margin-bottom: 0.8em;
+  margin-top: var(--image-gap);
+  margin-bottom: var(--image-gap);
   width: var(--image-width, 100%);
   max-width: 100%;
   text-align: var(--image-align, center);
@@ -324,17 +325,17 @@ input {
 
 .article-image--wrap[data-align="left"] {
   float: left;
-  margin: 0.35em 1.2em 0.8em 0;
+  margin: var(--image-gap) 1.2em var(--image-gap) 0;
 }
 
 .article-image--wrap[data-align="right"] {
   float: right;
-  margin: 0.35em 0 0.8em 1.2em;
+  margin: var(--image-gap) 0 var(--image-gap) 1.2em;
 }
 
 .article-image--wrap[data-align="center"] {
   float: none;
-  margin: 0.8em auto;
+  margin: var(--image-gap) auto;
 }
 
 .article-image.is-selected {
