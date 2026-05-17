@@ -68,12 +68,14 @@ set public = excluded.public,
     file_size_limit = excluded.file_size_limit,
     allowed_mime_types = excluded.allowed_mime_types;
 
-drop policy if exists "post images are readable by anyone" on storage.objects;
-create policy "post images are readable by anyone"
-on storage.objects
+drop policy if exists "post images bucket is visible" on storage.buckets;
+create policy "post images bucket is visible"
+on storage.buckets
 for select
 to anon, authenticated
-using (bucket_id = 'post-images');
+using (id = 'post-images');
+
+drop policy if exists "post images are readable by anyone" on storage.objects;
 
 drop policy if exists "authenticated users can upload post images" on storage.objects;
 create policy "authenticated users can upload post images"

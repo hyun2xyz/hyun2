@@ -234,7 +234,7 @@ test('database schema enables RLS and public readers only see published posts', 
   assert.match(schema, /authenticated users can manage posts/i);
   assert.match(schema, /insert into storage\.buckets/i);
   assert.match(schema, /post-images/i);
-  assert.match(schema, /post images are readable by anyone/i);
+  assert.match(schema, /post images bucket is visible/i);
   assert.match(schema, /authenticated users can upload post images/i);
   assert.doesNotMatch(schema, /centered-draft/i);
   assert.doesNotMatch(schema, /가안: 가운데에 놓인 글/);
