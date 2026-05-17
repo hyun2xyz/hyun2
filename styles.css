@@ -261,10 +261,16 @@ input {
   text-align: right;
 }
 
-.article__body p + p,
-.article__body p + .article-image,
-.article-image + p {
+.article__body p + p {
   margin-top: 0;
+}
+
+.article__body p + .article-image {
+  margin-top: 0.8em;
+}
+
+.article-image + p {
+  margin-top: 0.8em;
 }
 
 .article__body u {
@@ -275,7 +281,8 @@ input {
 
 .article-image {
   position: relative;
-  margin: 0;
+  margin-top: 0.8em;
+  margin-bottom: 0.8em;
   width: var(--image-width, 100%);
   max-width: 100%;
   text-align: var(--image-align, center);
@@ -317,17 +324,17 @@ input {
 
 .article-image--wrap[data-align="left"] {
   float: left;
-  margin: 0 1.2em 0.8em 0;
+  margin: 0.35em 1.2em 0.8em 0;
 }
 
 .article-image--wrap[data-align="right"] {
   float: right;
-  margin: 0 0 0.8em 1.2em;
+  margin: 0.35em 0 0.8em 1.2em;
 }
 
 .article-image--wrap[data-align="center"] {
   float: none;
-  margin: 0 auto 0.8em;
+  margin: 0.8em auto;
 }
 
 .article-image.is-selected {

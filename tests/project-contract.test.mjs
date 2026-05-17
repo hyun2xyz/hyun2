@@ -160,7 +160,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /reader is updated/);
   assert.match(app, /dedupePostTitles/);
   assert.match(css, /--body-line-height/);
-  assert.match(css, /\.article__body p \+ p,[\s\S]*margin-top:\s*0/);
+  assert.match(css, /\.article__body p \+ p[\s\S]*margin-top:\s*0/);
   assert.match(css, /--paragraph-indent/);
   assert.match(app, /firstTextBlockSeen/);
   assert.match(app, /articleBlocksMarkup/);
@@ -189,6 +189,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.article__body p\[data-align="center"\]/);
   assert.match(css, /\.article__body p\[data-indent="none"\]/);
   assert.match(css, /\.article-image img[\s\S]*cursor:\s*grab/);
+  assert.match(css, /\.article__body p \+ \.article-image[\s\S]*margin-top:\s*0\.8em/);
+  assert.match(css, /\.article-image \+ p[\s\S]*margin-top:\s*0\.8em/);
   assert.match(css, /\.image-resize-handle/);
   assert.match(css, /\.article-image\.is-selected/);
   assert.match(css, /\.admin-layout[\s\S]*margin:\s*0 auto/);
