@@ -208,7 +208,14 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /tool-icon--link/);
   assert.match(app, /editor__inline-tools/);
   assert.match(app, /data-action="link"/);
+  assert.match(app, /data-action="note-image-upload"/);
+  assert.match(app, /name="noteImageUpload"/);
+  assert.match(app, /type="file"/);
+  assert.match(app, /accept="image\/\*"/);
   assert.match(app, /insertHyperlinkNote/);
+  assert.match(app, /uploadHyperlinkNoteImage/);
+  assert.match(app, /note image uploaded/);
+  assert.match(app, /NOTE_IMAGE_WIDTH/);
   assert.match(app, /hyperlinkNoteElement/);
   assert.match(app, /hyperlink note added/);
   assert.match(app, /normalizePromptedLinkUrl/);
@@ -217,6 +224,7 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /note-popover/);
   assert.match(app, /hyperlinkNoteText/);
   assert.match(app, /noteDotMarkup\(hyperlinkNoteText\(href, noteText, image\), href, image\)/);
+  assert.doesNotMatch(app, /각주에 넣을 이미지 주소/);
   assert.match(app, /let lastEditorRange/);
   assert.match(app, /rememberEditorSelection/);
   assert.match(app, /attachEditorSelectionMemory/);
@@ -276,6 +284,8 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /\.note-dot:hover,[\s\S]*outline:\s*0/);
   assert.match(css, /\.note-dot\.is-open::after/);
   assert.match(css, /\.note-dot\.is-open::after[\s\S]*font-size:\s*11px/);
+  assert.match(css, /--note-image-width/);
+  assert.match(css, /height:\s*100%/);
   assert.match(css, /text-decoration-style:\s*solid/);
   assert.match(css, /\.index-page[\s\S]*justify-content:\s*center/);
   assert.match(css, /\.index-page__row[\s\S]*justify-content:\s*space-between/);

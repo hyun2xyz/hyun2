@@ -17,6 +17,7 @@ const THEME_KEY = 'hyun2.theme';
 const LANG_KEY = 'hyun2.lang';
 const TYPE_SETTINGS_KEY = 'hyun2.typeSettings';
 const HYUN2_IMAGE_MOVE_TYPE = 'application/x-hyun2-image-move';
+const NOTE_IMAGE_WIDTH = 180;
 const DEFAULT_TYPE_SETTINGS = {
   titleSizePt: 44,
   bodySizePt: 20,
@@ -737,6 +738,7 @@ function attachNoteDots(root) {
       <img src="${escapeHtml(image)}" alt="">
     `;
     document.body.append(popover);
+    popover.style.setProperty('--note-image-width', `${NOTE_IMAGE_WIDTH}px`);
     const rect = dot.getBoundingClientRect();
     popover.style.left = `${Math.min(window.innerWidth - popover.offsetWidth - 12, Math.max(12, rect.left))}px`;
     popover.style.top = `${Math.max(12, rect.bottom + 8)}px`;
@@ -1443,14 +1445,46 @@ function underlineSelection(contentRoot, statusRoot) {
 function insertHyperlinkNote(contentRoot, statusRoot) {
   const href = normalizePromptedLinkUrl(window.prompt('링크 주소를 입력하세요. 비워두면 설명 각주만 들어갑니다.'));
   const noteText = window.prompt('각주처럼 뜰 텍스트를 입력하세요.', href);
-  const imageUrl = sanitizeImageUrl(window.prompt('각주에 넣을 이미지 주소를 입력하세요. 없으면 비워두세요.'));
-  if (!href && !String(noteText ?? '').trim() && !imageUrl) {
-    statusRoot.textContent = '링크, 설명 텍스트, 이미지 중 하나는 필요합니다.';
+  if (!href && !String(noteText ?? '').trim()) {
+    statusRoot.textContent = '링크나 설명 텍스트 중 하나는 필요합니다.';
     return;
   }
 
-  insertInlineNode(contentRoot, hyperlinkNoteElement(href, noteText, imageUrl), { replaceSelection: false, beforeSelection: true });
+  insertInlineNode(contentRoot, hyperlinkNoteElement(href, noteText), { replaceSelection: false, beforeSelection: true });
   statusRoot.textContent = 'hyperlink note added. save to publish.';
+}
+
+async function uploadHyperlinkNoteImage(contentRoot, statusRoot, session, article, file, noteText = '', url = '') {
+  if (!file) return;
+
+  if (!session?.access_token) {
+    statusRoot.textContent = 'image note upload needs login.';
+    return;
+  }
+
+  const href = normalizePromptedLinkUrl(url);
+  statusRoot.textContent = `uploading note image: ${file.name}`;
+
+  let optimized = file;
+  let uploadResult;
+  try {
+    optimized = await optimizedImageFile(file);
+    uploadResult = await uploadPostImage(optimized, {
+      accessToken: session.access_token,
+      slug: article?.slug || slugify(article?.title)
+    });
+  } catch (error) {
+    statusRoot.textContent = `note image upload failed: ${error?.message ?? 'browser-upload-error'}`;
+    return;
+  }
+
+  if (!uploadResult.ok) {
+    statusRoot.textContent = `note image upload failed: ${imageUploadFailureMessage(uploadResult.reason)}`;
+    return;
+  }
+
+  insertInlineNode(contentRoot, hyperlinkNoteElement(href, noteText, uploadResult.image.src), { replaceSelection: false, beforeSelection: true });
+  statusRoot.textContent = 'note image uploaded. save to publish.';
 }
 
 function selectedEditableBlocks(contentRoot) {
@@ -1500,7 +1534,7 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
   statusRoot.textContent = 'selected paragraph style changed. save to publish.';
 }
 
-function attachEditorFormatting(root, contentRoot, statusRoot) {
+function attachEditorFormatting(root, contentRoot, statusRoot, session, article) {
   attachEditorSelectionMemory(contentRoot);
   root.querySelector('[data-panel="side"]')?.addEventListener('mousedown', () => {
     rememberEditorSelection(contentRoot);
@@ -1518,6 +1552,28 @@ function attachEditorFormatting(root, contentRoot, statusRoot) {
 
   root.querySelector('[data-action="link"]')?.addEventListener('click', () => {
     insertHyperlinkNote(contentRoot, statusRoot);
+  });
+
+  root.querySelector('[data-action="note-image-upload"]')?.addEventListener('click', () => {
+    const input = root.querySelector('[name="noteImageUpload"]');
+    if (!input) return;
+
+    const noteText = window.prompt('이미지 각주 설명을 입력하세요. 비워도 됩니다.', '');
+    if (noteText === null) return;
+    const href = window.prompt('이미지 각주에 연결할 링크 주소를 입력하세요. 없으면 비워두세요.', '');
+    if (href === null) return;
+
+    input.dataset.noteText = noteText;
+    input.dataset.url = href;
+    input.value = '';
+    input.click();
+  });
+
+  root.querySelector('[name="noteImageUpload"]')?.addEventListener('change', async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    await uploadHyperlinkNoteImage(contentRoot, statusRoot, session, article, file, input.dataset.noteText, input.dataset.url);
+    input.value = '';
   });
 
   root.querySelector('[data-action="align-left"]')?.addEventListener('click', () => {
@@ -1910,6 +1966,10 @@ async function renderEditor(options = {}) {
             <button class="text-tool icon-tool" type="button" data-action="link" title="하이퍼링크 각주" aria-label="하이퍼링크">
               <span class="tool-icon tool-icon--link" aria-hidden="true"></span>
             </button>
+            <button class="text-tool icon-tool" type="button" data-action="note-image-upload" title="이미지 각주 업로드" aria-label="이미지 각주 업로드">
+              <span class="tool-icon tool-icon--image-note" aria-hidden="true"></span>
+            </button>
+            <input class="visually-hidden" name="noteImageUpload" type="file" accept="image/*">
             <button class="text-tool icon-tool" type="button" data-action="indent-none" title="선택한 단락 들여쓰기 제거" aria-label="들여쓰기 제거">
               <span class="tool-icon tool-icon--indent-none" aria-hidden="true"></span>
             </button>
@@ -1963,7 +2023,7 @@ async function renderEditor(options = {}) {
   const statusRoot = root.querySelector('.editor__status');
   attachFirstTextBlockGuard(contentRoot);
   attachImageDrop(contentRoot, statusRoot, session, article);
-  attachEditorFormatting(root, contentRoot, statusRoot);
+  attachEditorFormatting(root, contentRoot, statusRoot, session, article);
   attachImageControls(root, contentRoot, statusRoot);
   attachAdminIndexDrag(root, posts, session, statusRoot);
   attachNoteDots(root);
