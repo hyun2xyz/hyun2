@@ -938,6 +938,100 @@ function readDisplayDateFromDom(article) {
     ?? new Date());
 }
 
+function editorHistoryFields(root) {
+  return Array.from(root.querySelectorAll('[name="displayDate"], [name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"], [name="paragraphFont"], [name="paragraphSizePt"]'));
+}
+
+function snapshotEditorState(root, contentRoot) {
+  const values = {};
+  editorHistoryFields(root).forEach((field) => {
+    values[field.name] = field.value;
+  });
+  const publishButton = root.querySelector('[data-action="publish"]');
+
+  return {
+    contentHtml: contentRoot.innerHTML,
+    values,
+    publishPressed: publishButton?.getAttribute('aria-pressed') === 'true'
+  };
+}
+
+function restoreEditorState(root, contentRoot, statusRoot, state) {
+  if (!state) return;
+  contentRoot.innerHTML = state.contentHtml;
+  editorHistoryFields(root).forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(state.values, field.name)) field.value = state.values[field.name];
+  });
+
+  const publishButton = root.querySelector('[data-action="publish"]');
+  if (publishButton) {
+    publishButton.setAttribute('aria-pressed', String(state.publishPressed));
+    publishButton.textContent = state.publishPressed ? 'status: published' : 'status: draft';
+  }
+
+  const nextStyle = readTypeSettingsFromDom(currentArticle());
+  saveTypeSettings(nextStyle);
+  applyTypeStyle(root, nextStyle);
+  setCurrentArticle({
+    ...currentArticle(),
+    style: nextStyle,
+    display_date: readDisplayDateFromDom(currentArticle())
+  });
+  syncImagePanel(root, selectedImageFigure(root));
+  statusRoot.textContent = 'history restored.';
+}
+
+function createEditorHistory(root, contentRoot, statusRoot) {
+  const history = {
+    stack: [snapshotEditorState(root, contentRoot)],
+    index: 0,
+    textTimer: null,
+    commit() {
+      const next = snapshotEditorState(root, contentRoot);
+      const current = this.stack[this.index];
+      if (JSON.stringify(next) === JSON.stringify(current)) return;
+      this.stack = this.stack.slice(0, this.index + 1);
+      this.stack.push(next);
+      this.index = this.stack.length - 1;
+    },
+    undo() {
+      if (this.index <= 0) return false;
+      this.index -= 1;
+      restoreEditorState(root, contentRoot, statusRoot, this.stack[this.index]);
+      return true;
+    },
+    redo() {
+      if (this.index >= this.stack.length - 1) return false;
+      this.index += 1;
+      restoreEditorState(root, contentRoot, statusRoot, this.stack[this.index]);
+      return true;
+    },
+    commitText() {
+      window.clearTimeout(this.textTimer);
+      this.textTimer = window.setTimeout(() => this.commit(), 300);
+    },
+    flushText() {
+      if (!this.textTimer) return;
+      window.clearTimeout(this.textTimer);
+      this.textTimer = null;
+      this.commit();
+    }
+  };
+
+  contentRoot.addEventListener('input', () => history.commitText());
+  root.addEventListener('keydown', (event) => {
+    if (!(event.metaKey || event.ctrlKey)) return;
+    const key = event.key.toLowerCase();
+    history.flushText();
+    const isRedo = (key === 'z' && event.shiftKey) || key === 'y';
+    const handled = isRedo ? history.redo() : key === 'z' && history.undo();
+    if (!handled) return;
+    event.preventDefault();
+  });
+
+  return history;
+}
+
 function editorBlocksFromDom() {
   const contentRoot = document.querySelector('[data-field="content"]');
   if (!contentRoot) return [];
@@ -1291,7 +1385,7 @@ function clearImageDropIndicator(contentRoot) {
   contentRoot.querySelector('.image-drop-indicator')?.remove();
 }
 
-function attachImageDrop(contentRoot, statusRoot, session, article) {
+function attachImageDrop(contentRoot, statusRoot, session, article, history) {
   contentRoot.addEventListener('dragover', (event) => {
     if (dataTransferHasType(event.dataTransfer, HYUN2_IMAGE_MOVE_TYPE)) {
       event.preventDefault();
@@ -1324,6 +1418,7 @@ function attachImageDrop(contentRoot, statusRoot, session, article) {
       moveExistingImageBlock(contentRoot, figure, event);
       figure.removeAttribute('data-image-drag-id');
       statusRoot.textContent = 'image moved. save to publish.';
+      history.commit();
       return;
     }
 
@@ -1334,6 +1429,7 @@ function attachImageDrop(contentRoot, statusRoot, session, article) {
     contentRoot.classList.remove('is-dragging');
     clearImageDropIndicator(contentRoot);
     await insertImageFiles(files, contentRoot, statusRoot, session, article, event);
+    history.commit();
   });
 
   contentRoot.addEventListener('paste', async (event) => {
@@ -1342,6 +1438,7 @@ function attachImageDrop(contentRoot, statusRoot, session, article) {
 
     event.preventDefault();
     await insertImageFiles(files, contentRoot, statusRoot, session, article);
+    history.commit();
   });
 }
 
@@ -1542,7 +1639,7 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
   statusRoot.textContent = 'selected paragraph style changed. save to publish.';
 }
 
-function attachEditorFormatting(root, contentRoot, statusRoot, session, article) {
+function attachEditorFormatting(root, contentRoot, statusRoot, session, article, history) {
   attachEditorSelectionMemory(contentRoot);
   root.querySelector('[data-panel="side"]')?.addEventListener('mousedown', () => {
     rememberEditorSelection(contentRoot);
@@ -1556,10 +1653,12 @@ function attachEditorFormatting(root, contentRoot, statusRoot, session, article)
 
   root.querySelector('[data-action="underline"]')?.addEventListener('click', () => {
     underlineSelection(contentRoot, statusRoot);
+    history.commit();
   });
 
   root.querySelector('[data-action="link"]')?.addEventListener('click', () => {
     insertHyperlinkNote(contentRoot, statusRoot);
+    history.commit();
   });
 
   root.querySelector('[data-action="note-image-upload"]')?.addEventListener('click', () => {
@@ -1581,31 +1680,37 @@ function attachEditorFormatting(root, contentRoot, statusRoot, session, article)
     const input = event.currentTarget;
     const file = input.files?.[0];
     await uploadHyperlinkNoteImage(contentRoot, statusRoot, session, article, file, input.dataset.noteText, input.dataset.url);
+    history.commit();
     input.value = '';
   });
 
   root.querySelector('[data-action="align-left"]')?.addEventListener('click', () => {
     alignSelectedBlocks(contentRoot, statusRoot, 'left');
+    history.commit();
   });
 
   root.querySelector('[data-action="align-center"]')?.addEventListener('click', () => {
     alignSelectedBlocks(contentRoot, statusRoot, 'center');
+    history.commit();
   });
 
   root.querySelector('[data-action="align-right"]')?.addEventListener('click', () => {
     alignSelectedBlocks(contentRoot, statusRoot, 'right');
+    history.commit();
   });
 
   root.querySelector('[data-action="indent-none"]')?.addEventListener('click', () => {
     removeIndentFromSelectedBlocks(contentRoot, statusRoot);
+    history.commit();
   });
 
   root.querySelector('[data-action="paragraph-style"]')?.addEventListener('click', () => {
     applySelectedBlockStyle(contentRoot, root, statusRoot);
+    history.commit();
   });
 }
 
-function attachImageResizeDrag(root, contentRoot, statusRoot) {
+function attachImageResizeDrag(root, contentRoot, statusRoot, history) {
   root.addEventListener('pointerdown', (event) => {
     const handle = event.target.closest?.('[data-image-resize-handle]');
     const figure = handle?.closest?.('[data-block-type="image"]');
@@ -1628,6 +1733,7 @@ function attachImageResizeDrag(root, contentRoot, statusRoot) {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
       statusRoot.textContent = 'image size changed. save to publish.';
+      history.commit();
     };
 
     window.addEventListener('pointermove', move);
@@ -1658,7 +1764,7 @@ function attachImageMove(root, contentRoot) {
   });
 }
 
-function attachImageControls(root, contentRoot, statusRoot) {
+function attachImageControls(root, contentRoot, statusRoot, history) {
   const panel = root.querySelector('[data-panel="image"]');
 
   root.addEventListener('click', (event) => {
@@ -1680,6 +1786,7 @@ function attachImageControls(root, contentRoot, statusRoot) {
     applyImageFigureSettings(figure);
     syncImagePanel(root, figure);
     statusRoot.textContent = 'image size changed. save to publish.';
+    history.commit();
   });
 
   root.addEventListener('click', (event) => {
@@ -1702,9 +1809,10 @@ function attachImageControls(root, contentRoot, statusRoot) {
     applyImageFigureSettings(figure);
     syncImagePanel(root, figure);
     statusRoot.textContent = 'image layout changed. save to publish.';
+    history.commit();
   });
 
-  attachImageResizeDrag(root, contentRoot, statusRoot);
+  attachImageResizeDrag(root, contentRoot, statusRoot, history);
   attachImageMove(root, contentRoot);
 }
 
@@ -2030,10 +2138,11 @@ async function renderEditor(options = {}) {
   attachThemeToggle(root);
   const contentRoot = root.querySelector('[data-field="content"]');
   const statusRoot = root.querySelector('.editor__status');
+  const history = createEditorHistory(root, contentRoot, statusRoot);
   attachFirstTextBlockGuard(contentRoot);
-  attachImageDrop(contentRoot, statusRoot, session, article);
-  attachEditorFormatting(root, contentRoot, statusRoot, session, article);
-  attachImageControls(root, contentRoot, statusRoot);
+  attachImageDrop(contentRoot, statusRoot, session, article, history);
+  attachEditorFormatting(root, contentRoot, statusRoot, session, article, history);
+  attachImageControls(root, contentRoot, statusRoot, history);
   attachAdminIndexDrag(root, posts, session, statusRoot);
   attachNoteDots(root);
 
@@ -2042,6 +2151,7 @@ async function renderEditor(options = {}) {
     const next = button.getAttribute('aria-pressed') !== 'true';
     button.setAttribute('aria-pressed', String(next));
     button.textContent = next ? 'status: published' : 'status: draft';
+    history.commit();
   });
 
   root.querySelectorAll('[name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"]').forEach((input) => {
@@ -2050,7 +2160,13 @@ async function renderEditor(options = {}) {
       saveTypeSettings(nextStyle);
       applyTypeStyle(root, nextStyle);
       setCurrentArticle({ ...currentArticle(), style: nextStyle });
+      history.commit();
     });
+  });
+
+  root.querySelector('[name="displayDate"]')?.addEventListener('input', () => {
+    setCurrentArticle({ ...currentArticle(), display_date: readDisplayDateFromDom(currentArticle()) });
+    history.commit();
   });
 
   root.querySelectorAll('[data-action="select-post"]').forEach((button) => {

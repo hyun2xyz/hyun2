@@ -115,6 +115,12 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /refreshSessionIfNeeded/);
   assert.match(app, /data-action="publish"/);
   assert.match(app, /status: published/);
+  assert.match(app, /createEditorHistory/);
+  assert.match(app, /snapshotEditorState/);
+  assert.match(app, /restoreEditorState/);
+  assert.match(app, /history\.commit/);
+  assert.match(app, /event\.metaKey \|\| event\.ctrlKey/);
+  assert.match(app, /selected paragraph style changed/);
   assert.match(app, /status: draft/);
   assert.match(app, /status = publishEnabled\(\) \? 'published' : 'draft'/);
   assert.match(app, /name="displayDate"/);
