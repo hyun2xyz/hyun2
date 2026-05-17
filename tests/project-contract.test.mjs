@@ -65,6 +65,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /pt/);
   assert.match(app, /contenteditable="true"/);
   assert.match(app, /insertImageFiles/);
+  assert.match(app, /imageUploadFailureMessage/);
+  assert.match(app, /storage bucket missing/);
+  assert.match(app, /supabase\/schema\.sql/);
   assert.match(app, /data-block-type="image"/);
   assert.match(app, /uploadPostImage/);
   assert.match(app, /optimizedImageFile/);
@@ -111,7 +114,13 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /--body-line-height/);
   assert.match(css, /\.article__body p \+ p,[\s\S]*margin-top:\s*0/);
   assert.match(css, /--paragraph-indent/);
-  assert.match(css, /\.article__body p:first-of-type[\s\S]*text-indent:\s*0/);
+  assert.match(app, /firstTextBlockSeen/);
+  assert.match(app, /articleBlocksMarkup/);
+  assert.match(app, /normalizeFirstTextBlockMarker/);
+  assert.match(app, /attachFirstTextBlockGuard/);
+  assert.match(app, /data-first-text-block="true"/);
+  assert.match(css, /\.article__body p\[data-first-text-block="true"\][\s\S]*text-indent:\s*0/);
+  assert.doesNotMatch(css, /\.article__body p:first-of-type[\s\S]*text-indent:\s*0/);
   assert.match(css, /\.article-image--wrap/);
   assert.match(css, /float:\s*left/);
   assert.match(css, /\.image-tools/);

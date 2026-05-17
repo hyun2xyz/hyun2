@@ -207,7 +207,7 @@ input {
   text-indent: var(--paragraph-indent, 0pt);
 }
 
-.article__body p:first-of-type {
+.article__body p[data-first-text-block="true"] {
   text-indent: 0;
 }
 

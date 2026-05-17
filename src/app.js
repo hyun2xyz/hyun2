@@ -9,7 +9,7 @@ import {
   signInWithPassword,
   updatePostContent,
   uploadPostImage
-} from './supabase-client.js?v=20260516-image-drop-fix';
+} from './supabase-client.js?v=20260517-indent-storage';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
@@ -566,7 +566,44 @@ function blockMarkup(block, options = {}) {
   const lineAttrs = lineHeight
     ? ` style="line-height: ${escapeHtml(lineHeight)}" data-line-height="${escapeHtml(lineHeight)}"`
     : '';
-  return `<p${lineAttrs}>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
+  const firstTextAttr = options.firstTextBlock ? ' data-first-text-block="true"' : '';
+  return `<p${firstTextAttr}${lineAttrs}>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
+}
+
+function articleBlocksMarkup(blocks, options = {}) {
+  let firstTextBlockSeen = false;
+  return blocks.map((block) => {
+    const firstTextBlock = block.type === 'text' && !firstTextBlockSeen;
+    if (firstTextBlock) firstTextBlockSeen = true;
+    return blockMarkup(block, { ...options, firstTextBlock });
+  }).join('');
+}
+
+function normalizeFirstTextBlockMarker(contentRoot) {
+  let firstTextBlockSeen = false;
+  Array.from(contentRoot.children).forEach((node) => {
+    if (!(node instanceof HTMLElement) || !node.matches('p')) {
+      node.removeAttribute?.('data-first-text-block');
+      return;
+    }
+
+    const hasText = node.innerText.trim()
+      || sanitizeInlineHtml(node.innerHTML).replace(/<br\s*\/?>/gi, '').trim();
+    if (hasText && !firstTextBlockSeen) {
+      node.setAttribute('data-first-text-block', 'true');
+      firstTextBlockSeen = true;
+      return;
+    }
+
+    node.removeAttribute('data-first-text-block');
+  });
+}
+
+function attachFirstTextBlockGuard(contentRoot) {
+  normalizeFirstTextBlockMarker(contentRoot);
+  contentRoot.addEventListener('input', () => {
+    window.requestAnimationFrame(() => normalizeFirstTextBlockMarker(contentRoot));
+  });
 }
 
 function articleMarkup(article, options = {}) {
@@ -578,7 +615,7 @@ function articleMarkup(article, options = {}) {
     <h1 class="article__title">${escapeHtml(view.title)}</h1>
     ${date ? `<time class="article__date" datetime="${escapeHtml(view.display_date ?? view.published_at ?? view.updated_at)}">${escapeHtml(date)}</time>` : ''}
     <div class="article__body">
-      ${blocks.map((block) => blockMarkup(block, options)).join('')}
+      ${articleBlocksMarkup(blocks, options)}
       ${options.editable && !blocks.length ? '<p><br></p>' : ''}
     </div>
   `;
@@ -983,6 +1020,22 @@ function imageFigureFromUpload(uploaded, file) {
   return figure;
 }
 
+function imageUploadFailureMessage(reason) {
+  if (reason === 'storage-bucket-missing') {
+    return 'storage bucket missing. Run supabase/schema.sql in Supabase SQL Editor, then try again.';
+  }
+
+  if (reason === 'storage-policy-blocked') {
+    return 'storage policy blocked. Check the Storage policies in supabase/schema.sql.';
+  }
+
+  if (reason === 'missing-upload-config') {
+    return 'missing upload session. login again, then try again.';
+  }
+
+  return reason;
+}
+
 function dropReferenceBlock(contentRoot, event) {
   return document.elementsFromPoint(event.clientX, event.clientY)
     .find((element) => element.parentElement === contentRoot
@@ -1022,7 +1075,7 @@ async function insertImageFiles(files, contentRoot, statusRoot, session, article
     }
 
     if (!uploadResult.ok) {
-      statusRoot.textContent = `image upload failed: ${uploadResult.reason}`;
+      statusRoot.textContent = `image upload failed: ${imageUploadFailureMessage(uploadResult.reason)}`;
       continue;
     }
 
@@ -1438,7 +1491,7 @@ async function renderEditor(options = {}) {
         </div>
 
         <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(article.title)}</h1>
-        <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${normalizeArticle(article).blocks.map((block) => blockMarkup(block, { editable: true })).join('') || '<p><br></p>'}</div>
+        <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${articleBlocksMarkup(normalizeArticle(article).blocks, { editable: true }) || '<p><br></p>'}</div>
         <p class="editor__status">${escapeHtml(options.statusText ?? '')}</p>
       </section>
     </div>
@@ -1447,6 +1500,7 @@ async function renderEditor(options = {}) {
   attachThemeToggle(root);
   const contentRoot = root.querySelector('[data-field="content"]');
   const statusRoot = root.querySelector('.editor__status');
+  attachFirstTextBlockGuard(contentRoot);
   attachImageDrop(contentRoot, statusRoot, session, article);
   attachEditorFormatting(root, contentRoot, statusRoot);
   attachImageControls(root, statusRoot);
