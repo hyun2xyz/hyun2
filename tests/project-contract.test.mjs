@@ -94,6 +94,12 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /image-resize-handle/);
   assert.match(app, /attachImageResizeDrag/);
   assert.match(app, /attachImageMove/);
+  assert.match(app, /attachImagePointerMove/);
+  assert.match(app, /pointerdown/);
+  assert.match(app, /pointermove/);
+  assert.match(app, /pointerup/);
+  assert.match(app, /setPointerCapture/);
+  assert.match(app, /image moved\. save to publish/);
   assert.match(app, /dropRangeFromPoint/);
   assert.match(app, /insertImageAtDropPoint/);
   assert.match(app, /image-drop-indicator/);
@@ -102,8 +108,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /HYUN2_IMAGE_MOVE_TYPE/);
   assert.match(app, /dataTransferHasType/);
   assert.match(app, /text\/plain/);
-  assert.match(app, /figure\.draggable = true/);
-  assert.match(app, /image\.draggable = true/);
+  assert.match(app, /figure\.draggable = false/);
+  assert.match(app, /image\.draggable = false/);
   assert.match(app, /selectImageFigure/);
   assert.match(app, /syncImagePanel/);
   assert.match(app, /name="imageWidth"/);
@@ -132,7 +138,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /data-action="trash"/);
   assert.match(app, /status:\s*'archived'/);
   assert.match(app, /trash/);
-  assert.match(app, /draggable="true"/);
+  assert.match(app, /draggable="false"/);
   assert.match(app, /renderGroup\('published', 'published'/);
   assert.match(app, /renderGroup\('draft', 'draft'/);
   assert.match(app, /data-index-group="\$\{group\}"/);

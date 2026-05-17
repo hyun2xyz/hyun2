@@ -307,6 +307,10 @@ input {
   cursor: grabbing;
 }
 
+.article-image.is-dragging img {
+  opacity: 0.45;
+}
+
 .article-image--wrap {
   width: var(--image-width, 42%);
 }

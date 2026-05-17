@@ -587,11 +587,11 @@ function imageBlockMarkup(block, options = {}) {
       data-align="${escapeHtml(align)}"
       data-wrap="${wrap ? 'true' : 'false'}"
       ${block.path ? `data-path="${escapeHtml(block.path)}"` : ''}
-      ${options.editable ? 'draggable="true"' : ''}
+      draggable="false"
       style="--image-width: ${escapeHtml(width)}%; --image-align: ${escapeHtml(align)};"
       contenteditable="false"
     >
-      <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}" ${options.editable ? 'draggable="true"' : 'draggable="false"'}>
+      <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}" draggable="false">
       ${options.editable ? '<button class="image-resize-handle" type="button" data-image-resize-handle aria-label="이미지 크기 조절"></button>' : ''}
     </figure>
   `;
@@ -1243,9 +1243,9 @@ function imageFigureFromUpload(uploaded, file) {
   const image = document.createElement('img');
   image.src = uploaded.src;
   image.alt = uploaded.alt || file.name || 'uploaded image';
-  image.draggable = true;
+  image.draggable = false;
   figure.append(image);
-  figure.draggable = true;
+  figure.draggable = false;
   applyImageFigureSettings(figure);
 
   return figure;
@@ -1286,7 +1286,7 @@ function dropReferenceBlock(contentRoot, event) {
       && (element.matches('p') || element.matches('[data-block-type="image"]')));
 }
 
-function ensureDropParagraph(contentRoot, paragraph) {
+function ensureDropParagraph(paragraph) {
   if (paragraph.textContent.trim() || paragraph.querySelector('.note-dot, u, br')) return paragraph;
   paragraph.innerHTML = '<br>';
   return paragraph;
@@ -1767,6 +1767,7 @@ function attachImageMove(root, contentRoot) {
     const figure = event.target.closest?.('[data-block-type="image"]');
     if (!figure || !contentRoot.contains(figure)) return;
 
+    event.preventDefault();
     const id = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now());
     figure.dataset.imageDragId = id;
     selectImageFigure(root, figure);
@@ -1782,6 +1783,73 @@ function attachImageMove(root, contentRoot) {
     });
     contentRoot.classList.remove('is-dragging');
     clearImageDropIndicator(contentRoot);
+  });
+}
+
+function attachImagePointerMove(root, contentRoot, statusRoot, history) {
+  contentRoot.addEventListener('pointerdown', (event) => {
+    const figure = event.target.closest?.('[data-block-type="image"]');
+    if (!figure || !contentRoot.contains(figure)) return;
+    if (event.target.closest?.('[data-image-resize-handle]')) return;
+    if (event.button !== 0) return;
+
+    event.preventDefault();
+    selectImageFigure(root, figure);
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let moved = false;
+
+    try {
+      figure.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture is only a drag helper; window-level listeners still move the image.
+    }
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', cancel);
+      try {
+        figure.releasePointerCapture?.(event.pointerId);
+      } catch {
+        // The pointer may not have been captured in every browser.
+      }
+      figure.classList.remove('is-dragging');
+      contentRoot.classList.remove('is-dragging');
+      clearImageDropIndicator(contentRoot);
+    };
+
+    const move = (moveEvent) => {
+      const distance = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
+      if (!moved && distance < 5) return;
+
+      moved = true;
+      moveEvent.preventDefault();
+      figure.classList.add('is-dragging');
+      contentRoot.classList.add('is-dragging');
+      showImageDropIndicator(contentRoot, moveEvent);
+    };
+
+    const end = (upEvent) => {
+      const shouldMove = moved;
+      cleanup();
+      if (!shouldMove) return;
+
+      upEvent.preventDefault();
+      moveExistingImageBlock(contentRoot, figure, upEvent);
+      selectImageFigure(root, figure);
+      statusRoot.textContent = 'image moved. save to publish.';
+      history.commit();
+    };
+
+    const cancel = () => {
+      cleanup();
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end, { once: true });
+    window.addEventListener('pointercancel', cancel, { once: true });
   });
 }
 
@@ -1834,6 +1902,7 @@ function attachImageControls(root, contentRoot, statusRoot, history) {
   });
 
   attachImageResizeDrag(root, contentRoot, statusRoot, history);
+  attachImagePointerMove(root, contentRoot, statusRoot, history);
   attachImageMove(root, contentRoot);
 }
 
