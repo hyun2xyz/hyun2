@@ -61,6 +61,14 @@ function uniqueSlug(slug) {
   return `${safeSlug}-${suffix}`;
 }
 
+function storageSafeSlug(slug) {
+  return String(slug || 'post')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'post';
+}
+
 function payloadForPost(post, slug = post.slug) {
   return {
     title: post.title,
@@ -331,10 +339,7 @@ export async function uploadPostImage(file, { accessToken, slug = 'untitled' } =
     return { ok: false, reason: 'missing-upload-config', image: null };
   }
 
-  const safeSlug = String(slug || 'untitled')
-    .trim()
-    .replace(/[^a-z0-9가-힣-]+/gi, '-')
-    .replace(/^-+|-+$/g, '') || 'untitled';
+  const safeSlug = storageSafeSlug(slug || 'post');
   const extension = file.type === 'image/png' ? 'png' : 'webp';
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const path = `posts/${safeSlug}/${id}.${extension}`;

@@ -9,7 +9,7 @@ import {
   signInWithPassword,
   updatePostContent,
   uploadPostImage
-} from './supabase-client.js?v=20260517-indent-storage';
+} from './supabase-client.js?v=20260517-storage-ascii-path';
 
 const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';

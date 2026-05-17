@@ -213,6 +213,29 @@ test('uploadPostImage stores images in the post-images bucket and returns a publ
   assert.match(result.image.src, /\/storage\/v1\/object\/public\/post-images\/posts\/hello-post\/.+\.webp$/);
 });
 
+test('uploadPostImage stores Korean-titled posts under an ASCII-safe Storage path', async () => {
+  let requestUrl = '';
+  const file = new Blob(['image'], { type: 'image/webp' });
+  file.name = 'hello.webp';
+
+  const result = await uploadPostImage(file, {
+    accessToken: 'access-token',
+    slug: '제목 없는 글'
+  }, async (url) => {
+    requestUrl = String(url);
+
+    return new Response(JSON.stringify({ Key: 'post-images/posts/post/image.webp' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(requestUrl, /\/storage\/v1\/object\/post-images\/posts\/post\/.+\.webp$/);
+  assert.doesNotMatch(requestUrl, /%EC|제목|없는|글/);
+  assert.match(result.image.path, /^posts\/post\/.+\.webp$/);
+});
+
 test('uploadPostImage reports a missing Storage bucket clearly', async () => {
   const file = new Blob(['image'], { type: 'image/webp' });
   file.name = 'hello.webp';
