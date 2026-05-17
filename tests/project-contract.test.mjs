@@ -85,9 +85,11 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /alignSelectedBlocks/);
   assert.match(app, /removeIndentFromSelectedBlocks/);
   assert.match(app, /applySelectedBlockStyle/);
+  assert.match(app, /clearSelectedBlockStyle/);
   assert.match(app, /name="paragraphFont"/);
   assert.match(app, /name="paragraphSizePt"/);
   assert.match(app, /data-action="paragraph-style"/);
+  assert.match(app, /data-action="paragraph-style-clear"/);
   assert.match(app, /selectedEditableBlocks/);
   assert.match(app, /image-resize-handle/);
   assert.match(app, /attachImageResizeDrag/);
@@ -212,6 +214,8 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /DA/);
   assert.match(app, /LA/);
   assert.match(app, /data-action="underline"/);
+  assert.match(app, /fallbackEditorRange\(contentRoot\)/);
+  assert.match(app, /selection\.removeAllRanges\(\)/);
   assert.match(app, /execCommand\('underline'\)/);
   assert.match(app, /textDecoration/);
   assert.match(app, /tool-icon--underline/);

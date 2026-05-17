@@ -1536,13 +1536,17 @@ function insertNoteDot(contentRoot, statusRoot) {
 }
 
 function underlineSelection(contentRoot, statusRoot) {
-  const range = selectionRangeIn(contentRoot);
+  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
   if (!range || range.collapsed) {
     statusRoot.textContent = 'drag text first, then press underline.';
     return;
   }
 
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
   document.execCommand('underline');
+  rememberEditorSelection(contentRoot);
   statusRoot.textContent = 'underline added. save to publish.';
 }
 
@@ -1638,6 +1642,19 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
   statusRoot.textContent = 'selected paragraph style changed. save to publish.';
 }
 
+function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
+  selectedEditableBlocks(contentRoot).forEach((paragraph) => {
+    paragraph.removeAttribute('data-font');
+    paragraph.removeAttribute('data-size-pt');
+    paragraph.style.fontSize = '';
+  });
+  const fontField = root.querySelector('[name="paragraphFont"]');
+  const sizeField = root.querySelector('[name="paragraphSizePt"]');
+  if (fontField) fontField.value = '';
+  if (sizeField) sizeField.value = '';
+  statusRoot.textContent = 'selected paragraph style cleared. save to publish.';
+}
+
 function attachEditorFormatting(root, contentRoot, statusRoot, session, article, history) {
   attachEditorSelectionMemory(contentRoot);
   root.querySelector('[data-panel="side"]')?.addEventListener('mousedown', () => {
@@ -1705,6 +1722,11 @@ function attachEditorFormatting(root, contentRoot, statusRoot, session, article,
 
   root.querySelector('[data-action="paragraph-style"]')?.addEventListener('click', () => {
     applySelectedBlockStyle(contentRoot, root, statusRoot);
+    history.commit();
+  });
+
+  root.querySelector('[data-action="paragraph-style-clear"]')?.addEventListener('click', () => {
+    clearSelectedBlockStyle(contentRoot, root, statusRoot);
     history.commit();
   });
 }
@@ -2115,6 +2137,7 @@ async function renderEditor(options = {}) {
             <span><input name="paragraphSizePt" type="number" min="6" max="120" step="1" placeholder="pt"> pt</span>
           </label>
           <button class="text-tool" type="button" data-action="paragraph-style">apply</button>
+          <button class="text-tool" type="button" data-action="paragraph-style-clear">delete</button>
         </div>
 
         <div class="image-panel image-tools" data-panel="image" aria-label="이미지 옵션" hidden>
