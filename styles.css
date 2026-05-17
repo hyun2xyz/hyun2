@@ -224,10 +224,26 @@ input {
 }
 
 .article-image {
+  position: relative;
   margin: 0;
   width: var(--image-width, 100%);
   max-width: 100%;
   text-align: var(--image-align, center);
+}
+
+.article-image[data-align="left"] {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.article-image[data-align="center"] {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.article-image[data-align="right"] {
+  margin-right: 0;
+  margin-left: auto;
 }
 
 .article-image img {
@@ -248,6 +264,31 @@ input {
 .article-image--wrap[data-align="right"] {
   float: right;
   margin: 0 0 0.8em 1.2em;
+}
+
+.article-image--wrap[data-align="center"] {
+  float: none;
+  margin: 0 auto 0.8em;
+}
+
+.article-image.is-selected {
+  outline: 1px solid var(--accent);
+  outline-offset: 6px;
+}
+
+.image-resize-handle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  display: block;
+  width: 14px;
+  min-width: 0;
+  height: 14px;
+  min-height: 0;
+  padding: 0;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  cursor: ew-resize;
 }
 
 .image-tools {
@@ -462,26 +503,82 @@ input {
 }
 
 .admin-root {
-  width: min(100%, 1080px);
+  width: 100%;
   margin: 0 auto;
 }
 
 .admin-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 36px;
+  display: block;
+  width: min(100%, 760px);
+  margin: 0 auto;
 }
 
 .admin-index {
-  flex: 0 0 min(220px, 24vw);
-  position: sticky;
+  position: fixed;
   top: 24px;
+  left: 28px;
+  z-index: 2;
+  width: 210px;
   font-size: 0.82rem;
 }
 
 .editor {
-  flex: 1 1 760px;
+  width: 100%;
   max-width: 760px;
+  margin: 0 auto;
+}
+
+.image-panel {
+  position: fixed;
+  top: 24px;
+  right: 28px;
+  z-index: 3;
+  display: block;
+  width: 170px;
+  padding: 0;
+  font-size: 0.7rem;
+  text-align: left;
+}
+
+.image-panel[hidden] {
+  display: none;
+}
+
+.image-panel p {
+  margin: 0 0 10px;
+}
+
+.image-panel label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.image-panel input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+}
+
+.image-panel div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.image-panel button {
+  min-height: 0;
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.image-panel button:hover,
+.image-panel button:focus-visible,
+.image-panel button.is-active {
+  color: var(--accent);
 }
 
 .admin-index__bar {
@@ -615,8 +712,7 @@ input {
   }
 
   .admin-layout {
-    flex-direction: column;
-    gap: 28px;
+    width: 100%;
   }
 
   .top-controls {
@@ -631,13 +727,33 @@ input {
     margin-bottom: 34px;
   }
 
-  .admin-index {
+  .admin-index,
+  .image-panel {
     position: static;
+    width: 100%;
+    margin-bottom: 28px;
   }
+
   .admin-index,
   .editor {
     width: 100%;
     max-width: none;
-    flex-basis: auto;
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 721px) {
+  .admin-layout {
+    width: min(100%, 760px);
+    margin: 0 auto;
+  }
+
+  .admin-index {
+    left: 18px;
+    width: 150px;
+  }
+
+  .image-panel {
+    right: 18px;
+    width: 150px;
   }
 }

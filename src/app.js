@@ -546,16 +546,7 @@ function imageBlockMarkup(block, options = {}) {
       contenteditable="false"
     >
       <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}">
-      ${options.editable ? `
-        <div class="image-tools" aria-label="이미지 조정">
-          <button type="button" data-image-action="smaller" title="작게">-</button>
-          <button type="button" data-image-action="larger" title="크게">+</button>
-          <button type="button" data-image-action="left" title="왼쪽">L</button>
-          <button type="button" data-image-action="center" title="가운데">C</button>
-          <button type="button" data-image-action="right" title="오른쪽">R</button>
-          <button type="button" data-image-action="wrap" title="글 감싸기">wrap</button>
-        </div>
-      ` : ''}
+      ${options.editable ? '<button class="image-resize-handle" type="button" data-image-resize-handle aria-label="이미지 크기 조절"></button>' : ''}
     </figure>
   `;
 }
@@ -1001,6 +992,34 @@ function applyImageFigureSettings(figure) {
   figure.classList.toggle('article-image--wrap', wrap);
 }
 
+function selectedImageFigure(root) {
+  return root.querySelector('.article-image.is-selected');
+}
+
+function syncImagePanel(root, figure = selectedImageFigure(root)) {
+  const panel = root.querySelector('[data-panel="image"]');
+  if (!panel) return;
+
+  const hasFigure = Boolean(figure);
+  panel.hidden = !hasFigure;
+  panel.querySelector('[name="imageWidth"]').value = hasFigure
+    ? String(Math.round(Number.parseFloat(figure.dataset.width) || 100))
+    : '100';
+  panel.querySelectorAll('[data-image-action="left"], [data-image-action="center"], [data-image-action="right"]').forEach((button) => {
+    button.classList.toggle('is-active', hasFigure && button.dataset.imageAction === figure.dataset.align);
+  });
+  panel.querySelector('[data-image-action="wrap"]')?.classList.toggle('is-active', hasFigure && figure.dataset.wrap === 'true');
+}
+
+function selectImageFigure(root, figure) {
+  root.querySelectorAll('.article-image.is-selected').forEach((image) => {
+    if (image !== figure) image.classList.remove('is-selected');
+  });
+
+  figure?.classList.add('is-selected');
+  syncImagePanel(root, figure);
+}
+
 function imageFigureFromUpload(uploaded, file) {
   const figure = document.createElement('figure');
   figure.className = 'article-image';
@@ -1209,10 +1228,60 @@ function attachEditorFormatting(root, contentRoot, statusRoot) {
   });
 }
 
-function attachImageControls(root, statusRoot) {
+function attachImageResizeDrag(root, contentRoot, statusRoot) {
+  root.addEventListener('pointerdown', (event) => {
+    const handle = event.target.closest?.('[data-image-resize-handle]');
+    const figure = handle?.closest?.('[data-block-type="image"]');
+    if (!handle || !figure || !root.contains(figure)) return;
+
+    event.preventDefault();
+    selectImageFigure(root, figure);
+    const startX = event.clientX;
+    const startWidth = Number.parseFloat(figure.dataset.width) || 100;
+    const contentWidth = Math.max(1, contentRoot.getBoundingClientRect().width);
+
+    const move = (moveEvent) => {
+      const delta = ((moveEvent.clientX - startX) / contentWidth) * 100;
+      figure.dataset.width = String(Math.min(100, Math.max(18, startWidth + delta)));
+      applyImageFigureSettings(figure);
+      syncImagePanel(root, figure);
+    };
+
+    const end = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      statusRoot.textContent = 'image size changed. save to publish.';
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end, { once: true });
+  });
+}
+
+function attachImageControls(root, contentRoot, statusRoot) {
+  const panel = root.querySelector('[data-panel="image"]');
+
+  root.addEventListener('click', (event) => {
+    const figure = event.target.closest?.('[data-block-type="image"]');
+    if (figure && root.contains(figure)) {
+      selectImageFigure(root, figure);
+    }
+  });
+
+  panel?.querySelector('[name="imageWidth"]')?.addEventListener('input', (event) => {
+    const figure = selectedImageFigure(root);
+    if (!figure) return;
+    figure.dataset.width = event.currentTarget.value;
+    applyImageFigureSettings(figure);
+    syncImagePanel(root, figure);
+    statusRoot.textContent = 'image size changed. save to publish.';
+  });
+
   root.addEventListener('click', (event) => {
     const action = event.target.closest?.('[data-image-action]')?.dataset.imageAction;
-    const figure = event.target.closest?.('[data-block-type="image"]');
+    const figure = event.target.closest?.('[data-panel="image"]')
+      ? selectedImageFigure(root)
+      : event.target.closest?.('[data-block-type="image"]');
     if (!action || !figure || !root.contains(figure)) return;
 
     if (action === 'smaller') {
@@ -1226,8 +1295,11 @@ function attachImageControls(root, statusRoot) {
     }
 
     applyImageFigureSettings(figure);
+    syncImagePanel(root, figure);
     statusRoot.textContent = 'image layout changed. save to publish.';
   });
+
+  attachImageResizeDrag(root, contentRoot, statusRoot);
 }
 
 function saveFailureMessage(reason) {
@@ -1494,6 +1566,20 @@ async function renderEditor(options = {}) {
         <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${articleBlocksMarkup(normalizeArticle(article).blocks, { editable: true }) || '<p><br></p>'}</div>
         <p class="editor__status">${escapeHtml(options.statusText ?? '')}</p>
       </section>
+
+      <aside class="image-panel image-tools" data-panel="image" aria-label="이미지 옵션" hidden>
+        <p>image</p>
+        <label>
+          size
+          <input name="imageWidth" type="range" min="18" max="100" step="1" value="100">
+        </label>
+        <div>
+          <button type="button" data-image-action="left">왼쪽</button>
+          <button type="button" data-image-action="center">가운데</button>
+          <button type="button" data-image-action="right">오른쪽</button>
+          <button type="button" data-image-action="wrap">감싸기</button>
+        </div>
+      </aside>
     </div>
   `;
 
@@ -1503,7 +1589,7 @@ async function renderEditor(options = {}) {
   attachFirstTextBlockGuard(contentRoot);
   attachImageDrop(contentRoot, statusRoot, session, article);
   attachEditorFormatting(root, contentRoot, statusRoot);
-  attachImageControls(root, statusRoot);
+  attachImageControls(root, contentRoot, statusRoot);
   attachAdminIndexDrag(root, posts, session, statusRoot);
   attachNoteDots(root);
 
