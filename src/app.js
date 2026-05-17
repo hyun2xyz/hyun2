@@ -82,6 +82,19 @@ function sanitizeLinkUrl(value) {
   return '';
 }
 
+function normalizePromptedLinkUrl(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const direct = sanitizeLinkUrl(raw);
+  if (direct) return direct;
+  if (/^[^\s/@]+\.[^\s]+$/i.test(raw)) return `https://${raw}`;
+  return '';
+}
+
+function normalizeTextAlign(value) {
+  return ['left', 'center', 'right'].includes(value) ? value : '';
+}
+
 function textFromHtml(html) {
   const template = document.createElement('template');
   template.innerHTML = String(html ?? '');
@@ -229,13 +242,15 @@ function normalizeBlocks(blocks, fallbackBody = '') {
       const html = block?.html ? sanitizeInlineHtml(block.html) : '';
       const text = String(block?.text ?? (html ? textFromHtml(html) : '')).trim();
       const lineHeight = normalizeBlockLineHeight(block?.lineHeight);
+      const align = normalizeTextAlign(block?.align);
       if (!text && !html.replace(/<br\s*\/?>/gi, '').trim()) return null;
 
       return {
         type: 'text',
         text,
         ...(html ? { html } : {}),
-        ...(lineHeight ? { lineHeight } : {})
+        ...(lineHeight ? { lineHeight } : {}),
+        ...(align ? { align } : {})
       };
     })
     .filter(Boolean);
@@ -557,11 +572,18 @@ function imageBlockMarkup(block, options = {}) {
 function blockMarkup(block, options = {}) {
   if (block.type === 'image') return imageBlockMarkup(block, options);
   const lineHeight = normalizeBlockLineHeight(block.lineHeight);
-  const lineAttrs = lineHeight
-    ? ` style="line-height: ${escapeHtml(lineHeight)}" data-line-height="${escapeHtml(lineHeight)}"`
-    : '';
+  const align = normalizeTextAlign(block.align);
+  const styles = [
+    lineHeight ? `line-height: ${escapeHtml(lineHeight)}` : '',
+    align ? `text-align: ${escapeHtml(align)}` : ''
+  ].filter(Boolean);
+  const lineAttrs = [
+    styles.length ? `style="${styles.join('; ')}"` : '',
+    lineHeight ? `data-line-height="${escapeHtml(lineHeight)}"` : '',
+    align ? `data-align="${escapeHtml(align)}"` : ''
+  ].filter(Boolean).join(' ');
   const firstTextAttr = options.firstTextBlock ? ' data-first-text-block="true"' : '';
-  return `<p${firstTextAttr}${lineAttrs}>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
+  return `<p${firstTextAttr}${lineAttrs ? ` ${lineAttrs}` : ''}>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
 }
 
 function articleBlocksMarkup(blocks, options = {}) {
@@ -876,12 +898,14 @@ function editorBlocksFromDom() {
       const text = node.innerText.trim();
       const html = sanitizeInlineHtml(node.innerHTML).trim();
       const lineHeight = normalizeBlockLineHeight(node.dataset.lineHeight || node.style.lineHeight);
+      const align = normalizeTextAlign(node.dataset.align || node.style.textAlign);
       return text || html
         ? {
             type: 'text',
             text,
             ...(html ? { html } : {}),
-            ...(lineHeight ? { lineHeight } : {})
+            ...(lineHeight ? { lineHeight } : {}),
+            ...(align ? { align } : {})
           }
         : null;
     })
@@ -1023,6 +1047,11 @@ function selectImageFigure(root, figure) {
   syncImagePanel(root, figure);
 }
 
+function clearSelectedImageFigure(root) {
+  root.querySelectorAll('.article-image.is-selected').forEach((image) => image.classList.remove('is-selected'));
+  syncImagePanel(root, null);
+}
+
 function imageFigureFromUpload(uploaded, file) {
   const figure = document.createElement('figure');
   figure.className = 'article-image';
@@ -1058,10 +1087,63 @@ function imageUploadFailureMessage(reason) {
   return reason;
 }
 
+function dropRangeFromPoint(contentRoot, event) {
+  const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+  if (range && rangeBelongsToContent(range, contentRoot)) return range;
+
+  const position = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+  if (!position) return null;
+
+  const nextRange = document.createRange();
+  nextRange.setStart(position.offsetNode, position.offset);
+  nextRange.collapse(true);
+  return rangeBelongsToContent(nextRange, contentRoot) ? nextRange : null;
+}
+
 function dropReferenceBlock(contentRoot, event) {
   return document.elementsFromPoint(event.clientX, event.clientY)
     .find((element) => element.parentElement === contentRoot
       && (element.matches('p') || element.matches('[data-block-type="image"]')));
+}
+
+function ensureDropParagraph(contentRoot, paragraph) {
+  if (paragraph.textContent.trim() || paragraph.querySelector('.note-dot, u, br')) return paragraph;
+  paragraph.innerHTML = '<br>';
+  return paragraph;
+}
+
+function splitParagraphForImage(paragraph, range, figure) {
+  const afterRange = range.cloneRange();
+  afterRange.setEndAfter(paragraph.lastChild ?? paragraph);
+  const afterContent = afterRange.extractContents();
+  ensureDropParagraph(paragraph);
+
+  paragraph.after(figure);
+  if (afterContent.textContent.trim() || afterContent.querySelector?.('button, u, br')) {
+    const afterParagraph = paragraph.cloneNode(false);
+    afterParagraph.removeAttribute('data-first-text-block');
+    afterParagraph.append(afterContent);
+    figure.after(afterParagraph);
+  }
+}
+
+function insertImageAtDropPoint(contentRoot, figure, event = null) {
+  const range = event ? dropRangeFromPoint(contentRoot, event) : null;
+  const paragraph = range?.commonAncestorContainer?.nodeType === Node.ELEMENT_NODE
+    ? range.commonAncestorContainer.closest?.('p')
+    : range?.commonAncestorContainer?.parentElement?.closest?.('p');
+
+  if (paragraph && contentRoot.contains(paragraph)) {
+    splitParagraphForImage(paragraph, range, figure);
+  } else {
+    insertImageNode(contentRoot, figure, event);
+  }
+
+  if (!figure.nextElementSibling?.matches('p')) {
+    const nextParagraph = document.createElement('p');
+    nextParagraph.append(document.createElement('br'));
+    figure.after(nextParagraph);
+  }
 }
 
 function insertImageNode(contentRoot, figure, event = null) {
@@ -1080,22 +1162,8 @@ function insertImageNode(contentRoot, figure, event = null) {
 }
 
 function moveExistingImageBlock(contentRoot, figure, event) {
-  const reference = dropReferenceBlock(contentRoot, event);
-  if (reference === figure) return;
-
-  if (!reference) {
-    contentRoot.append(figure);
-  } else {
-    const rect = reference.getBoundingClientRect();
-    const before = event.clientY < rect.top + rect.height / 2;
-    contentRoot.insertBefore(figure, before ? reference : reference.nextSibling);
-  }
-
-  if (!figure.nextElementSibling?.matches('p')) {
-    const paragraph = document.createElement('p');
-    paragraph.append(document.createElement('br'));
-    contentRoot.insertBefore(paragraph, figure.nextSibling);
-  }
+  if (document.elementsFromPoint(event.clientX, event.clientY).includes(figure)) return;
+  insertImageAtDropPoint(contentRoot, figure, event);
 }
 
 async function insertImageFiles(files, contentRoot, statusRoot, session, article, event = null) {
@@ -1120,9 +1188,21 @@ async function insertImageFiles(files, contentRoot, statusRoot, session, article
       continue;
     }
 
-    insertImageNode(contentRoot, imageFigureFromUpload(uploadResult.image, optimized), event);
+    insertImageAtDropPoint(contentRoot, imageFigureFromUpload(uploadResult.image, optimized), event);
     statusRoot.textContent = 'image uploaded. save to publish.';
   }
+}
+
+function showImageDropIndicator(contentRoot, event) {
+  const marker = contentRoot.querySelector('.image-drop-indicator') ?? document.createElement('span');
+  const rect = contentRoot.getBoundingClientRect();
+  marker.className = 'image-drop-indicator';
+  marker.style.top = `${Math.max(0, event.clientY - rect.top + contentRoot.scrollTop)}px`;
+  if (!marker.parentElement) contentRoot.append(marker);
+}
+
+function clearImageDropIndicator(contentRoot) {
+  contentRoot.querySelector('.image-drop-indicator')?.remove();
 }
 
 function attachImageDrop(contentRoot, statusRoot, session, article) {
@@ -1131,16 +1211,19 @@ function attachImageDrop(contentRoot, statusRoot, session, article) {
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
       contentRoot.classList.add('is-dragging');
+      showImageDropIndicator(contentRoot, event);
       return;
     }
 
     if (!hasImageInDataTransfer(event.dataTransfer)) return;
     event.preventDefault();
     contentRoot.classList.add('is-dragging');
+    showImageDropIndicator(contentRoot, event);
   });
 
   contentRoot.addEventListener('dragleave', () => {
     contentRoot.classList.remove('is-dragging');
+    clearImageDropIndicator(contentRoot);
   });
 
   contentRoot.addEventListener('drop', async (event) => {
@@ -1151,6 +1234,7 @@ function attachImageDrop(contentRoot, statusRoot, session, article) {
 
       event.preventDefault();
       contentRoot.classList.remove('is-dragging');
+      clearImageDropIndicator(contentRoot);
       moveExistingImageBlock(contentRoot, figure, event);
       figure.removeAttribute('data-image-drag-id');
       statusRoot.textContent = 'image moved. save to publish.';
@@ -1162,6 +1246,7 @@ function attachImageDrop(contentRoot, statusRoot, session, article) {
 
     event.preventDefault();
     contentRoot.classList.remove('is-dragging');
+    clearImageDropIndicator(contentRoot);
     await insertImageFiles(files, contentRoot, statusRoot, session, article, event);
   });
 
@@ -1248,8 +1333,9 @@ function noteDotElement(value) {
 }
 
 function hyperlinkNoteElement(url) {
+  const href = normalizePromptedLinkUrl(url);
   const template = document.createElement('template');
-  template.innerHTML = noteDotMarkup('', url);
+  template.innerHTML = noteDotMarkup(href, href);
   return template.content.firstElementChild;
 }
 
@@ -1273,9 +1359,9 @@ function underlineSelection(contentRoot, statusRoot) {
 }
 
 function insertHyperlinkNote(contentRoot, statusRoot) {
-  const href = sanitizeLinkUrl(window.prompt('링크 주소를 입력하세요.'));
+  const href = normalizePromptedLinkUrl(window.prompt('링크 주소를 입력하세요.'));
   if (!href) {
-    statusRoot.textContent = 'https://, http://, mailto: 링크만 사용할 수 있습니다.';
+    statusRoot.textContent = '주소를 다시 확인해 주세요. 예: example.com 또는 https://example.com';
     return;
   }
 
@@ -1283,9 +1369,29 @@ function insertHyperlinkNote(contentRoot, statusRoot) {
   statusRoot.textContent = 'hyperlink note added. save to publish.';
 }
 
+function selectedEditableBlocks(contentRoot) {
+  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
+  const paragraphs = Array.from(contentRoot.querySelectorAll('p'));
+  if (!range) return paragraphs.slice(0, 1);
+
+  const selected = paragraphs.filter((paragraph) => range.intersectsNode(paragraph));
+  return selected.length ? selected : paragraphs.slice(0, 1);
+}
+
+function alignSelectedBlocks(contentRoot, statusRoot, align) {
+  const nextAlign = normalizeTextAlign(align);
+  if (!nextAlign) return;
+
+  selectedEditableBlocks(contentRoot).forEach((paragraph) => {
+    paragraph.dataset.align = nextAlign;
+    paragraph.style.textAlign = nextAlign;
+  });
+  statusRoot.textContent = `paragraph aligned ${nextAlign}. save to publish.`;
+}
+
 function attachEditorFormatting(root, contentRoot, statusRoot) {
   attachEditorSelectionMemory(contentRoot);
-  root.querySelectorAll('[data-action="underline"], [data-action="link"]').forEach((button) => {
+  root.querySelectorAll('[data-action="underline"], [data-action="link"], [data-action^="align-"]').forEach((button) => {
     button.addEventListener('mousedown', (event) => {
       event.preventDefault();
       rememberEditorSelection(contentRoot);
@@ -1298,6 +1404,18 @@ function attachEditorFormatting(root, contentRoot, statusRoot) {
 
   root.querySelector('[data-action="link"]')?.addEventListener('click', () => {
     insertHyperlinkNote(contentRoot, statusRoot);
+  });
+
+  root.querySelector('[data-action="align-left"]')?.addEventListener('click', () => {
+    alignSelectedBlocks(contentRoot, statusRoot, 'left');
+  });
+
+  root.querySelector('[data-action="align-center"]')?.addEventListener('click', () => {
+    alignSelectedBlocks(contentRoot, statusRoot, 'center');
+  });
+
+  root.querySelector('[data-action="align-right"]')?.addEventListener('click', () => {
+    alignSelectedBlocks(contentRoot, statusRoot, 'right');
   });
 }
 
@@ -1348,6 +1466,7 @@ function attachImageMove(root, contentRoot) {
       figure.removeAttribute('data-image-drag-id');
     });
     contentRoot.classList.remove('is-dragging');
+    clearImageDropIndicator(contentRoot);
   });
 }
 
@@ -1358,6 +1477,11 @@ function attachImageControls(root, contentRoot, statusRoot) {
     const figure = event.target.closest?.('[data-block-type="image"]');
     if (figure && root.contains(figure)) {
       selectImageFigure(root, figure);
+      return;
+    }
+
+    if (!event.target.closest?.('[data-panel="image"]')) {
+      clearSelectedImageFigure(root);
     }
   });
 
@@ -1659,6 +1783,11 @@ async function renderEditor(options = {}) {
           <div class="editor__inline-tools" data-panel="tools" aria-label="글 수정 도구">
             <button class="text-tool" type="button" data-action="underline" title="선택한 글자에 밑줄">밑줄</button>
             <button class="text-tool" type="button" data-action="link" title="선택한 글자에 하이퍼링크">하이퍼링크</button>
+          </div>
+          <div class="editor-align-tools" aria-label="문단 정렬">
+            <button class="text-tool" type="button" data-action="align-left" title="선택한 단락 왼쪽 정렬">왼쪽</button>
+            <button class="text-tool" type="button" data-action="align-center" title="선택한 단락 가운데 정렬">중앙</button>
+            <button class="text-tool" type="button" data-action="align-right" title="선택한 단락 오른쪽 정렬">오른쪽</button>
           </div>
         </div>
 

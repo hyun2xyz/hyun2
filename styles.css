@@ -211,6 +211,18 @@ input {
   text-indent: 0;
 }
 
+.article__body p[data-align="left"] {
+  text-align: left;
+}
+
+.article__body p[data-align="center"] {
+  text-align: center;
+}
+
+.article__body p[data-align="right"] {
+  text-align: right;
+}
+
 .article__body p + p,
 .article__body p + .article-image,
 .article-image + p {
@@ -654,12 +666,25 @@ input {
   padding: 2px 4px;
 }
 
+.editor__settings input[name="displayDate"] {
+  width: 128px;
+}
+
 .editor__inline-tools {
   display: inline-flex;
+  flex-basis: 100%;
   align-items: baseline;
   align-self: flex-end;
   gap: 10px;
   padding-top: 0;
+  padding-bottom: 2px;
+}
+
+.editor-align-tools {
+  display: inline-flex;
+  flex-basis: 100%;
+  align-items: baseline;
+  gap: 10px;
   padding-bottom: 2px;
 }
 
@@ -693,9 +718,21 @@ input {
 }
 
 .editor__content {
+  position: relative;
   min-height: 260px;
   border-top: 1px solid var(--line);
   padding-top: 18px;
+}
+
+.image-drop-indicator {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 5;
+  display: block;
+  height: 0;
+  border-top: 1px solid var(--accent);
+  pointer-events: none;
 }
 
 .editor__content.is-dragging {
