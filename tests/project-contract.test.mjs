@@ -288,6 +288,9 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /\.note-dot/);
   assert.match(css, /counter-reset:\s*note-number/);
   assert.match(css, /color:\s*#d11c24/);
+  assert.match(css, /:root\[data-theme="dark"\][\s\S]*--note-color:\s*#7aa7ff/);
+  assert.match(css, /:root:not\(\[data-theme\]\)[\s\S]*--note-color:\s*#7aa7ff/);
+  assert.match(css, /\.note-dot[\s\S]*color:\s*var\(--note-color\)/);
   assert.match(css, /counter-increment:\s*note-number/);
   assert.match(css, /content:\s*counter\(note-number\)/);
   assert.match(css, /font-size:\s*0\.58em/);

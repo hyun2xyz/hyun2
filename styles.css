@@ -4,6 +4,7 @@
   --line: #000;
   --muted: #555;
   --accent: #0645ff;
+  --note-color: #d11c24;
   --font-gothic: "Source Han Sans KR", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
   --font-myungjo: "Source Han Serif KR", "Noto Serif KR", "Gowun Batang", serif;
   --font-latin-mix: "Times New Roman", "Noto Serif KR", "Gowun Batang", serif;
@@ -23,6 +24,7 @@
   --line: #f3f3f3;
   --muted: #b8b8b8;
   --accent: #7aa7ff;
+  --note-color: #7aa7ff;
   color-scheme: dark;
 }
 
@@ -33,6 +35,7 @@
     --line: #f3f3f3;
     --muted: #b8b8b8;
     --accent: #7aa7ff;
+    --note-color: #7aa7ff;
     color-scheme: dark;
   }
 }
@@ -368,7 +371,7 @@ input {
   padding: 0;
   margin: 0 -0.12em 0 0.02em;
   vertical-align: text-top;
-  color: #d11c24;
+  color: var(--note-color);
   background: transparent;
   border: 0;
   border-radius: 0;
