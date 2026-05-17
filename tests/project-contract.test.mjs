@@ -98,8 +98,10 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /clearSelectedImageFigure/);
   assert.match(app, /moveExistingImageBlock/);
   assert.match(app, /HYUN2_IMAGE_MOVE_TYPE/);
+  assert.match(app, /dataTransferHasType/);
   assert.match(app, /text\/plain/);
   assert.match(app, /figure\.draggable = true/);
+  assert.match(app, /image\.draggable = true/);
   assert.match(app, /selectImageFigure/);
   assert.match(app, /syncImagePanel/);
   assert.match(app, /name="imageWidth"/);
@@ -171,6 +173,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.image-drop-indicator/);
   assert.match(css, /\.article__body p\[data-align="center"\]/);
   assert.match(css, /\.article__body p\[data-indent="none"\]/);
+  assert.match(css, /\.article-image img[\s\S]*cursor:\s*grab/);
   assert.match(css, /\.image-resize-handle/);
   assert.match(css, /\.article-image\.is-selected/);
   assert.match(css, /\.admin-layout[\s\S]*margin:\s*0 auto/);

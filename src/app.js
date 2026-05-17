@@ -591,7 +591,7 @@ function imageBlockMarkup(block, options = {}) {
       style="--image-width: ${escapeHtml(width)}%; --image-align: ${escapeHtml(align)};"
       contenteditable="false"
     >
-      <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}" draggable="false">
+      <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}" ${options.editable ? 'draggable="true"' : 'draggable="false"'}>
       ${options.editable ? '<button class="image-resize-handle" type="button" data-image-resize-handle aria-label="이미지 크기 조절"></button>' : ''}
     </figure>
   `;
@@ -1042,6 +1042,14 @@ function hasImageInDataTransfer(dataTransfer) {
       .some((item) => item.kind === 'file' && item.type.startsWith('image/'));
 }
 
+function dataTransferHasType(dataTransfer, type) {
+  const types = dataTransfer?.types;
+  if (!types) return false;
+  if (typeof types.includes === 'function') return types.includes(type);
+  if (typeof types.contains === 'function') return types.contains(type);
+  return Array.from(types).includes(type);
+}
+
 function dataUrlFromFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1142,7 +1150,7 @@ function imageFigureFromUpload(uploaded, file) {
   const image = document.createElement('img');
   image.src = uploaded.src;
   image.alt = uploaded.alt || file.name || 'uploaded image';
-  image.draggable = false;
+  image.draggable = true;
   figure.append(image);
   figure.draggable = true;
   applyImageFigureSettings(figure);
@@ -1285,7 +1293,7 @@ function clearImageDropIndicator(contentRoot) {
 
 function attachImageDrop(contentRoot, statusRoot, session, article) {
   contentRoot.addEventListener('dragover', (event) => {
-    if (event.dataTransfer?.types?.includes(HYUN2_IMAGE_MOVE_TYPE)) {
+    if (dataTransferHasType(event.dataTransfer, HYUN2_IMAGE_MOVE_TYPE)) {
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
       contentRoot.classList.add('is-dragging');
@@ -1305,7 +1313,7 @@ function attachImageDrop(contentRoot, statusRoot, session, article) {
   });
 
   contentRoot.addEventListener('drop', async (event) => {
-    if (event.dataTransfer?.types?.includes(HYUN2_IMAGE_MOVE_TYPE)) {
+    if (dataTransferHasType(event.dataTransfer, HYUN2_IMAGE_MOVE_TYPE)) {
       const id = event.dataTransfer.getData(HYUN2_IMAGE_MOVE_TYPE);
       const figure = id ? contentRoot.querySelector(`[data-image-drag-id="${CSS.escape(id)}"]`) : null;
       if (!figure) return;
@@ -1637,7 +1645,8 @@ function attachImageMove(root, contentRoot) {
     selectImageFigure(root, figure);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData(HYUN2_IMAGE_MOVE_TYPE, id);
-    event.dataTransfer.setData('text/plain', 'hyun2-image-move');
+    event.dataTransfer.setData('text/plain', id);
+    event.dataTransfer.setDragImage?.(figure, Math.min(40, figure.offsetWidth / 2), Math.min(40, figure.offsetHeight / 2));
   });
 
   contentRoot.addEventListener('dragend', () => {

@@ -297,6 +297,11 @@ input {
   display: inline-block;
   max-width: 100%;
   height: auto;
+  cursor: grab;
+}
+
+.article-image:active img {
+  cursor: grabbing;
 }
 
 .article-image--wrap {
