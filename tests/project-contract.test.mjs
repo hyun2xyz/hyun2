@@ -180,6 +180,10 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /insertHyperlinkNote/);
   assert.match(app, /hyperlinkNoteElement/);
   assert.match(app, /hyperlink note added/);
+  assert.match(app, /let lastEditorRange/);
+  assert.match(app, /rememberEditorSelection/);
+  assert.match(app, /attachEditorSelectionMemory/);
+  assert.match(app, /event\.preventDefault\(\)/);
   assert.doesNotMatch(app, /execCommand\('createLink'/);
   assert.doesNotMatch(app, /data-action="note"/);
   assert.match(app, /beforeSelection:\s*true/);

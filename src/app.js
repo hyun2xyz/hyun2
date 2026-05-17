@@ -57,6 +57,7 @@ const isAdminPage = document.body.dataset.admin === 'true'
   || routeParams.has('admin');
 const isIndexPage = routeParams.has('index')
   || routeParams.get('view') === 'index';
+let lastEditorRange = null;
 
 function splitParagraphs(content) {
   if (Array.isArray(content)) return content;
@@ -1178,11 +1179,33 @@ function selectionRangeIn(contentRoot) {
   if (!selection || selection.rangeCount === 0) return null;
 
   const range = selection.getRangeAt(0);
+  return rangeBelongsToContent(range, contentRoot) ? range : null;
+}
+
+function rangeBelongsToContent(range, contentRoot) {
+  if (!range) return false;
   const container = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
     ? range.commonAncestorContainer
     : range.commonAncestorContainer.parentElement;
 
-  return container && contentRoot.contains(container) ? range : null;
+  return Boolean(container && contentRoot.contains(container));
+}
+
+function rememberEditorSelection(contentRoot) {
+  const range = selectionRangeIn(contentRoot);
+  if (range) lastEditorRange = range.cloneRange();
+  return range;
+}
+
+function fallbackEditorRange(contentRoot) {
+  return rangeBelongsToContent(lastEditorRange, contentRoot) ? lastEditorRange.cloneRange() : null;
+}
+
+function attachEditorSelectionMemory(contentRoot) {
+  ['keyup', 'mouseup', 'input'].forEach((eventName) => {
+    contentRoot.addEventListener(eventName, () => rememberEditorSelection(contentRoot));
+  });
+  document.addEventListener('selectionchange', () => rememberEditorSelection(contentRoot));
 }
 
 function placeCaretAfter(node) {
@@ -1195,7 +1218,7 @@ function placeCaretAfter(node) {
 }
 
 function insertInlineNode(contentRoot, node, options = {}) {
-  const range = selectionRangeIn(contentRoot);
+  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
   if (range) {
     if (options.replaceSelection) {
       range.deleteContents();
@@ -1205,6 +1228,7 @@ function insertInlineNode(contentRoot, node, options = {}) {
       range.collapse(false);
     }
     range.insertNode(node);
+    lastEditorRange = range.cloneRange();
     placeCaretAfter(node);
     return;
   }
@@ -1260,6 +1284,14 @@ function insertHyperlinkNote(contentRoot, statusRoot) {
 }
 
 function attachEditorFormatting(root, contentRoot, statusRoot) {
+  attachEditorSelectionMemory(contentRoot);
+  root.querySelectorAll('[data-action="underline"], [data-action="link"]').forEach((button) => {
+    button.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      rememberEditorSelection(contentRoot);
+    });
+  });
+
   root.querySelector('[data-action="underline"]')?.addEventListener('click', () => {
     underlineSelection(contentRoot, statusRoot);
   });
