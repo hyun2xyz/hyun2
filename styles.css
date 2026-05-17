@@ -271,7 +271,7 @@ input {
 }
 
 .article__body p + .article-image--wrap {
-  margin-top: 0;
+  margin-top: var(--image-gap);
 }
 
 .article-image + p {
@@ -328,13 +328,13 @@ input {
 }
 
 .article-image--wrap[data-align="left"] {
-  float: left;
-  margin: 0 1.2em 0 0;
+  float: none;
+  margin: var(--image-gap) auto var(--image-gap) 0;
 }
 
 .article-image--wrap[data-align="right"] {
-  float: right;
-  margin: 0 0 0 1.2em;
+  float: none;
+  margin: var(--image-gap) 0 var(--image-gap) auto;
 }
 
 .article-image--wrap[data-align="center"] {

@@ -170,7 +170,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.article__body p\[data-first-text-block="true"\][\s\S]*text-indent:\s*0/);
   assert.doesNotMatch(css, /\.article__body p:first-of-type[\s\S]*text-indent:\s*0/);
   assert.match(css, /\.article-image--wrap/);
-  assert.match(css, /float:\s*left/);
+  assert.doesNotMatch(css, /float:\s*left/);
+  assert.doesNotMatch(css, /float:\s*right/);
   assert.match(css, /\.image-panel/);
   assert.match(css, /\.editor-side-panel/);
   assert.match(css, /\.editor-side-panel[\s\S]*position:\s*fixed/);
@@ -191,11 +192,11 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.article-image img[\s\S]*cursor:\s*grab/);
   assert.match(css, /--image-gap:\s*0\.55em/);
   assert.match(css, /\.article__body p \+ \.article-image[\s\S]*margin-top:\s*var\(--image-gap\)/);
-  assert.match(css, /\.article__body p \+ \.article-image--wrap[\s\S]*margin-top:\s*0/);
+  assert.match(css, /\.article__body p \+ \.article-image--wrap[\s\S]*margin-top:\s*var\(--image-gap\)/);
   assert.match(css, /\.article-image \+ p[\s\S]*margin-top:\s*0/);
   assert.match(css, /\.article-image[\s\S]*margin-bottom:\s*var\(--image-gap\)/);
-  assert.match(css, /\.article-image--wrap\[data-align="left"\][\s\S]*margin:\s*0 1\.2em 0 0/);
-  assert.match(css, /\.article-image--wrap\[data-align="right"\][\s\S]*margin:\s*0 0 0 1\.2em/);
+  assert.match(css, /\.article-image--wrap\[data-align="left"\][\s\S]*margin:\s*var\(--image-gap\) auto var\(--image-gap\) 0/);
+  assert.match(css, /\.article-image--wrap\[data-align="right"\][\s\S]*margin:\s*var\(--image-gap\) 0 var\(--image-gap\) auto/);
   assert.match(css, /\.image-resize-handle/);
   assert.match(css, /\.article-image\.is-selected/);
   assert.match(css, /\.admin-layout[\s\S]*margin:\s*0 auto/);
