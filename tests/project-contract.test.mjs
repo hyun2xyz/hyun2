@@ -199,6 +199,7 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /routeParams\.has\('index'\)/);
   assert.match(app, /renderIndexPage/);
   assert.match(app, /href="\.\/\?index"/);
+  assert.doesNotMatch(app, /<h1>index<\/h1>/);
   assert.match(app, /data-action="top"/);
   assert.match(app, /scrollTo\(\{\s*top:\s*0,\s*behavior:\s*'smooth'/);
   assert.match(app, /renderTopControls/);

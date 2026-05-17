@@ -812,7 +812,6 @@ function renderIndexPage(posts = []) {
   root.innerHTML = `
     <section class="index-page" aria-label="전체 목차">
       <div class="index-page__inner">
-        <h1>index</h1>
         <nav class="index-page__list">
           ${posts.map((post) => `
             <a class="index-page__row" href="./?post=${encodeURIComponent(post.slug)}">
