@@ -18,6 +18,8 @@ const LANG_KEY = 'hyun2.lang';
 const TYPE_SETTINGS_KEY = 'hyun2.typeSettings';
 const HYUN2_IMAGE_MOVE_TYPE = 'application/x-hyun2-image-move';
 const NOTE_IMAGE_WIDTH = 180;
+const DEFAULT_IMAGE_MARGIN_PT = 8;
+const DEFAULT_WRAP_GAP_PT = 16;
 const DEFAULT_TYPE_SETTINGS = {
   titleSizePt: 44,
   bodySizePt: 20,
@@ -113,6 +115,27 @@ function normalizeBlockSizePt(value) {
   const next = Number.parseFloat(value);
   if (!Number.isFinite(next)) return null;
   return String(Math.min(120, Math.max(6, next)));
+}
+
+function normalizeImageHeight(value) {
+  const next = Number.parseFloat(value);
+  if (!Number.isFinite(next) || next <= 0) return null;
+  return Math.min(2000, Math.max(24, next));
+}
+
+function normalizeImageMarginPt(value, fallback = DEFAULT_IMAGE_MARGIN_PT) {
+  const next = Number.parseFloat(value);
+  if (!Number.isFinite(next)) return fallback;
+  return Math.min(240, Math.max(0, next));
+}
+
+function imageMarginDefaults({ align = 'center', wrap = false } = {}) {
+  return {
+    top: DEFAULT_IMAGE_MARGIN_PT,
+    right: wrap && align === 'left' ? DEFAULT_WRAP_GAP_PT : 0,
+    bottom: DEFAULT_IMAGE_MARGIN_PT,
+    left: wrap && align === 'right' ? DEFAULT_WRAP_GAP_PT : 0
+  };
 }
 
 function textFromHtml(html) {
@@ -250,14 +273,24 @@ function normalizeBlocks(blocks, fallbackBody = '') {
     .map((block) => {
       if (block?.type === 'image' && block.src) {
         const width = Number.parseFloat(block.width);
+        const align = ['left', 'right', 'center'].includes(block.align) ? block.align : 'center';
+        const wrap = Boolean(block.wrap);
+        const margins = imageMarginDefaults({ align, wrap });
+        const height = normalizeImageHeight(block.height);
         return {
           type: 'image',
           src: String(block.src),
           alt: String(block.alt ?? ''),
+          caption: String(block.caption ?? ''),
           ...(block.path ? { path: String(block.path) } : {}),
           width: Number.isFinite(width) ? Math.min(100, Math.max(18, width)) : 100,
-          align: ['left', 'right', 'center'].includes(block.align) ? block.align : 'center',
-          wrap: Boolean(block.wrap)
+          ...(height ? { height } : {}),
+          marginTop: normalizeImageMarginPt(block.marginTop, margins.top),
+          marginRight: normalizeImageMarginPt(block.marginRight, margins.right),
+          marginBottom: normalizeImageMarginPt(block.marginBottom, margins.bottom),
+          marginLeft: normalizeImageMarginPt(block.marginLeft, margins.left),
+          align,
+          wrap
         };
       }
 
@@ -579,19 +612,42 @@ function imageBlockMarkup(block, options = {}) {
   const width = Number.isFinite(Number.parseFloat(block.width)) ? Number.parseFloat(block.width) : 100;
   const align = ['left', 'right', 'center'].includes(block.align) ? block.align : 'center';
   const wrap = Boolean(block.wrap);
+  const defaults = imageMarginDefaults({ align, wrap });
+  const height = normalizeImageHeight(block.height);
+  const marginTop = normalizeImageMarginPt(block.marginTop, defaults.top);
+  const marginRight = normalizeImageMarginPt(block.marginRight, defaults.right);
+  const marginBottom = normalizeImageMarginPt(block.marginBottom, defaults.bottom);
+  const marginLeft = normalizeImageMarginPt(block.marginLeft, defaults.left);
+  const caption = String(block.caption ?? '').trim();
+  const styles = [
+    `--image-width: ${escapeHtml(width)}%`,
+    `--image-align: ${escapeHtml(align)}`,
+    height ? `--image-height: ${escapeHtml(height)}px` : '',
+    `--image-margin-top: ${escapeHtml(marginTop)}pt`,
+    `--image-margin-right: ${escapeHtml(marginRight)}pt`,
+    `--image-margin-bottom: ${escapeHtml(marginBottom)}pt`,
+    `--image-margin-left: ${escapeHtml(marginLeft)}pt`
+  ].filter(Boolean).join('; ');
   return `
     <figure
       class="article-image ${wrap ? 'article-image--wrap' : ''}"
       data-block-type="image"
       data-width="${escapeHtml(width)}"
+      ${height ? `data-height="${escapeHtml(height)}"` : ''}
+      data-margin-top="${escapeHtml(marginTop)}"
+      data-margin-right="${escapeHtml(marginRight)}"
+      data-margin-bottom="${escapeHtml(marginBottom)}"
+      data-margin-left="${escapeHtml(marginLeft)}"
       data-align="${escapeHtml(align)}"
       data-wrap="${wrap ? 'true' : 'false'}"
+      data-caption="${escapeHtml(caption)}"
       ${block.path ? `data-path="${escapeHtml(block.path)}"` : ''}
       draggable="false"
-      style="--image-width: ${escapeHtml(width)}%; --image-align: ${escapeHtml(align)};"
+      style="${styles}"
       contenteditable="false"
     >
       <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}" draggable="false">
+      ${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}
       ${options.editable ? '<button class="image-resize-handle" type="button" data-image-resize-handle aria-label="이미지 크기 조절"></button>' : ''}
     </figure>
   `;
@@ -734,8 +790,8 @@ function attachNoteDots(root) {
     const popover = document.createElement('div');
     popover.className = 'note-popover';
     popover.innerHTML = `
-      ${dot.dataset.note ? `<p>${escapeHtml(dot.dataset.note)}</p>` : ''}
       <img src="${escapeHtml(image)}" alt="">
+      ${dot.dataset.note ? `<p>${escapeHtml(dot.dataset.note)}</p>` : ''}
     `;
     document.body.append(popover);
     popover.style.setProperty('--note-image-width', `${NOTE_IMAGE_WIDTH}px`);
@@ -1051,8 +1107,14 @@ function editorBlocksFromDom() {
               type: 'image',
               src: image.src,
               alt: image.alt,
+              caption: node.dataset.caption ?? '',
               ...(node.dataset.path ? { path: node.dataset.path } : {}),
               width: Number.parseFloat(node.dataset.width) || 100,
+              ...(normalizeImageHeight(node.dataset.height) ? { height: normalizeImageHeight(node.dataset.height) } : {}),
+              marginTop: normalizeImageMarginPt(node.dataset.marginTop),
+              marginRight: normalizeImageMarginPt(node.dataset.marginRight, 0),
+              marginBottom: normalizeImageMarginPt(node.dataset.marginBottom),
+              marginLeft: normalizeImageMarginPt(node.dataset.marginLeft, 0),
               align: node.dataset.align || 'center',
               wrap: node.dataset.wrap === 'true'
             }
@@ -1189,12 +1251,48 @@ function applyImageFigureSettings(figure) {
   const width = Math.min(100, Math.max(18, Number.parseFloat(figure.dataset.width) || 100));
   const align = ['left', 'right', 'center'].includes(figure.dataset.align) ? figure.dataset.align : 'center';
   const wrap = figure.dataset.wrap === 'true';
+  const defaults = imageMarginDefaults({ align, wrap });
+  const height = normalizeImageHeight(figure.dataset.height);
+  const marginTop = normalizeImageMarginPt(figure.dataset.marginTop, defaults.top);
+  const marginRight = normalizeImageMarginPt(figure.dataset.marginRight, defaults.right);
+  const marginBottom = normalizeImageMarginPt(figure.dataset.marginBottom, defaults.bottom);
+  const marginLeft = normalizeImageMarginPt(figure.dataset.marginLeft, defaults.left);
+  const caption = String(figure.dataset.caption ?? '').trim();
   figure.dataset.width = String(width);
   figure.dataset.align = align;
   figure.dataset.wrap = wrap ? 'true' : 'false';
+  if (height) {
+    figure.dataset.height = String(height);
+    figure.style.setProperty('--image-height', `${height}px`);
+  } else {
+    delete figure.dataset.height;
+    figure.style.removeProperty('--image-height');
+  }
+  figure.dataset.marginTop = String(marginTop);
+  figure.dataset.marginRight = String(marginRight);
+  figure.dataset.marginBottom = String(marginBottom);
+  figure.dataset.marginLeft = String(marginLeft);
+  figure.dataset.caption = caption;
   figure.style.setProperty('--image-width', `${width}%`);
   figure.style.setProperty('--image-align', align);
+  figure.style.setProperty('--image-margin-top', `${marginTop}pt`);
+  figure.style.setProperty('--image-margin-right', `${marginRight}pt`);
+  figure.style.setProperty('--image-margin-bottom', `${marginBottom}pt`);
+  figure.style.setProperty('--image-margin-left', `${marginLeft}pt`);
   figure.classList.toggle('article-image--wrap', wrap);
+  let captionNode = figure.querySelector('figcaption');
+  if (caption && !captionNode) {
+    captionNode = document.createElement('figcaption');
+    const resizeHandle = figure.querySelector('[data-image-resize-handle]');
+    figure.insertBefore(captionNode, resizeHandle ?? null);
+  }
+  if (captionNode) {
+    if (caption) {
+      captionNode.textContent = caption;
+    } else {
+      captionNode.remove();
+    }
+  }
 }
 
 function selectedImageFigure(root) {
@@ -1210,6 +1308,14 @@ function syncImagePanel(root, figure = selectedImageFigure(root)) {
   panel.querySelector('[name="imageWidth"]').value = hasFigure
     ? String(Math.round(Number.parseFloat(figure.dataset.width) || 100))
     : '100';
+  panel.querySelector('[name="imageHeight"]').value = hasFigure && figure.dataset.height
+    ? String(Math.round(Number.parseFloat(figure.dataset.height)))
+    : '';
+  panel.querySelector('[name="imageMarginTop"]').value = hasFigure ? String(Number.parseFloat(figure.dataset.marginTop) || 0) : '';
+  panel.querySelector('[name="imageMarginRight"]').value = hasFigure ? String(Number.parseFloat(figure.dataset.marginRight) || 0) : '';
+  panel.querySelector('[name="imageMarginBottom"]').value = hasFigure ? String(Number.parseFloat(figure.dataset.marginBottom) || 0) : '';
+  panel.querySelector('[name="imageMarginLeft"]').value = hasFigure ? String(Number.parseFloat(figure.dataset.marginLeft) || 0) : '';
+  panel.querySelector('[name="imageCaption"]').value = hasFigure ? String(figure.dataset.caption ?? '') : '';
   panel.querySelectorAll('[data-image-action="left"], [data-image-action="center"], [data-image-action="right"]').forEach((button) => {
     button.classList.toggle('is-active', hasFigure && button.dataset.imageAction === figure.dataset.align);
   });
@@ -1237,6 +1343,11 @@ function imageFigureFromUpload(uploaded, file) {
   figure.dataset.width = '100';
   figure.dataset.align = 'center';
   figure.dataset.wrap = 'false';
+  figure.dataset.marginTop = String(DEFAULT_IMAGE_MARGIN_PT);
+  figure.dataset.marginRight = '0';
+  figure.dataset.marginBottom = String(DEFAULT_IMAGE_MARGIN_PT);
+  figure.dataset.marginLeft = '0';
+  figure.dataset.caption = '';
   if (uploaded.path) figure.dataset.path = uploaded.path;
   figure.contentEditable = 'false';
 
@@ -1835,6 +1946,34 @@ function attachImageControls(root, contentRoot, statusRoot, history) {
     history.commit();
   });
 
+  panel?.querySelectorAll('[name="imageHeight"], [name="imageMarginTop"], [name="imageMarginRight"], [name="imageMarginBottom"], [name="imageMarginLeft"], [name="imageCaption"]').forEach((input) => {
+    input.addEventListener('input', (event) => {
+      const figure = selectedImageFigure(root);
+      if (!figure) return;
+      const { name, value } = event.currentTarget;
+
+      if (name === 'imageHeight') {
+        const height = normalizeImageHeight(value);
+        if (height) {
+          figure.dataset.height = String(height);
+        } else {
+          delete figure.dataset.height;
+        }
+      } else if (name === 'imageCaption') {
+        figure.dataset.caption = value;
+      } else {
+        const key = name.replace(/^image/, '');
+        const datasetKey = key.charAt(0).toLowerCase() + key.slice(1);
+        figure.dataset[datasetKey] = String(normalizeImageMarginPt(value, 0));
+      }
+
+      applyImageFigureSettings(figure);
+      syncImagePanel(root, figure);
+      statusRoot.textContent = 'image spacing changed. save to publish.';
+      history.commit();
+    });
+  });
+
   root.addEventListener('click', (event) => {
     const action = event.target.closest?.('[data-image-action]')?.dataset.imageAction;
     const figure = event.target.closest?.('[data-panel="image"]')
@@ -1850,6 +1989,11 @@ function attachImageControls(root, contentRoot, statusRoot, history) {
       figure.dataset.align = action;
     } else if (action === 'wrap') {
       figure.dataset.wrap = figure.dataset.wrap === 'true' ? 'false' : 'true';
+      if (figure.dataset.wrap === 'true') {
+        const align = ['left', 'right', 'center'].includes(figure.dataset.align) ? figure.dataset.align : 'center';
+        if (align === 'left' && !(Number.parseFloat(figure.dataset.marginRight) > 0)) figure.dataset.marginRight = String(DEFAULT_WRAP_GAP_PT);
+        if (align === 'right' && !(Number.parseFloat(figure.dataset.marginLeft) > 0)) figure.dataset.marginLeft = String(DEFAULT_WRAP_GAP_PT);
+      }
     }
 
     applyImageFigureSettings(figure);
@@ -2091,6 +2235,7 @@ async function renderEditor(options = {}) {
           <button type="button" data-action="new">new</button>
           <button type="button" data-action="save">save</button>
           <button type="button" data-action="publish" aria-pressed="${article.status === 'published'}">${article.status === 'published' ? 'status: published' : 'status: draft'}</button>
+          <button type="button" data-action="theme-toggle" aria-label="${currentTheme() === 'dark' ? 'dark' : 'light'}">${themeLabel(currentTheme())}</button>
           <a class="button-link" href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
           <button type="button" data-action="trash">trash</button>
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
@@ -2169,8 +2314,32 @@ async function renderEditor(options = {}) {
         <div class="image-panel image-tools" data-panel="image" aria-label="이미지 옵션" hidden>
           <p>image</p>
           <label>
-            size
+            가로
             <input name="imageWidth" type="range" min="18" max="100" step="1" value="100">
+          </label>
+          <label>
+            세로
+            <input name="imageHeight" type="number" min="24" max="2000" step="1" placeholder="auto">
+          </label>
+          <label>
+            위
+            <input name="imageMarginTop" type="number" min="0" max="240" step="1" placeholder="pt">
+          </label>
+          <label>
+            오른쪽
+            <input name="imageMarginRight" type="number" min="0" max="240" step="1" placeholder="pt">
+          </label>
+          <label>
+            아래
+            <input name="imageMarginBottom" type="number" min="0" max="240" step="1" placeholder="pt">
+          </label>
+          <label>
+            왼쪽
+            <input name="imageMarginLeft" type="number" min="0" max="240" step="1" placeholder="pt">
+          </label>
+          <label>
+            각주
+            <input name="imageCaption" type="text" placeholder="이미지 밑 설명">
           </label>
           <div>
             <button type="button" data-image-action="left">왼쪽</button>
@@ -2184,6 +2353,7 @@ async function renderEditor(options = {}) {
   `;
 
   attachThemeToggle(root);
+  attachLangToggle(root);
   const contentRoot = root.querySelector('[data-field="content"]');
   const statusRoot = root.querySelector('.editor__status');
   const history = createEditorHistory(root, contentRoot, statusRoot);

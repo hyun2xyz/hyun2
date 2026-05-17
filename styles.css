@@ -267,11 +267,11 @@ input {
 }
 
 .article__body p + .article-image {
-  margin-top: var(--image-gap);
+  margin-top: var(--image-margin-top);
 }
 
 .article__body p + .article-image--wrap {
-  margin-top: var(--image-gap);
+  margin-top: var(--image-margin-top);
 }
 
 .article-image + p {
@@ -286,8 +286,8 @@ input {
 
 .article-image {
   position: relative;
-  margin-top: var(--image-gap);
-  margin-bottom: var(--image-gap);
+  margin-top: var(--image-margin-top);
+  margin-bottom: var(--image-margin-bottom);
   width: var(--image-width, 100%);
   max-width: 100%;
   text-align: var(--image-align, center);
@@ -295,7 +295,7 @@ input {
 
 .article-image[data-align="left"] {
   margin-right: auto;
-  margin-left: 0;
+  margin-left: var(--image-margin-left);
 }
 
 .article-image[data-align="center"] {
@@ -304,15 +304,24 @@ input {
 }
 
 .article-image[data-align="right"] {
-  margin-right: 0;
+  margin-right: var(--image-margin-right);
   margin-left: auto;
 }
 
 .article-image img {
   display: inline-block;
+  width: 100%;
   max-width: 100%;
-  height: auto;
+  height: var(--image-height, auto);
+  object-fit: contain;
   cursor: grab;
+}
+
+.article-image figcaption {
+  margin-top: 0.45em;
+  font-size: 0.72em;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .article-image:active img {
@@ -328,18 +337,18 @@ input {
 }
 
 .article-image--wrap[data-align="left"] {
-  float: none;
-  margin: var(--image-gap) auto var(--image-gap) 0;
+  float: left;
+  margin: var(--image-margin-top) var(--image-margin-right) var(--image-margin-bottom) var(--image-margin-left);
 }
 
 .article-image--wrap[data-align="right"] {
-  float: none;
-  margin: var(--image-gap) 0 var(--image-gap) auto;
+  float: right;
+  margin: var(--image-margin-top) var(--image-margin-right) var(--image-margin-bottom) var(--image-margin-left);
 }
 
 .article-image--wrap[data-align="center"] {
   float: none;
-  margin: var(--image-gap) auto;
+  margin: var(--image-margin-top) auto var(--image-margin-bottom);
 }
 
 .article-image.is-selected {
@@ -462,7 +471,7 @@ input {
 }
 
 .note-popover p {
-  margin: 0 0 6px;
+  margin: 6px 0 0;
 }
 
 .note-popover img {
