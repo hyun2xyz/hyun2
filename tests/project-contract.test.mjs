@@ -84,6 +84,10 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /data-action="indent-none"/);
   assert.match(app, /alignSelectedBlocks/);
   assert.match(app, /removeIndentFromSelectedBlocks/);
+  assert.match(app, /applySelectedBlockStyle/);
+  assert.match(app, /name="paragraphFont"/);
+  assert.match(app, /name="paragraphSizePt"/);
+  assert.match(app, /data-action="paragraph-style"/);
   assert.match(app, /selectedEditableBlocks/);
   assert.match(app, /image-resize-handle/);
   assert.match(app, /attachImageResizeDrag/);
@@ -94,6 +98,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /clearSelectedImageFigure/);
   assert.match(app, /moveExistingImageBlock/);
   assert.match(app, /HYUN2_IMAGE_MOVE_TYPE/);
+  assert.match(app, /text\/plain/);
+  assert.match(app, /figure\.draggable = true/);
   assert.match(app, /selectImageFigure/);
   assert.match(app, /syncImagePanel/);
   assert.match(app, /name="imageWidth"/);
@@ -157,6 +163,11 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.icon-tool/);
   assert.match(css, /\.tool-icon--link/);
   assert.match(css, /\.tool-icon--align-center/);
+  assert.match(css, /--font-gothic/);
+  assert.match(css, /--font-myungjo/);
+  assert.match(css, /--font-latin-mix/);
+  assert.match(css, /\.article__body p\[data-font="gothic"\]/);
+  assert.match(css, /\.article__body p\[data-size-pt\]/);
   assert.match(css, /\.image-drop-indicator/);
   assert.match(css, /\.article__body p\[data-align="center"\]/);
   assert.match(css, /\.article__body p\[data-indent="none"\]/);
@@ -201,8 +212,11 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /hyperlinkNoteElement/);
   assert.match(app, /hyperlink note added/);
   assert.match(app, /normalizePromptedLinkUrl/);
+  assert.match(app, /sanitizeImageUrl/);
+  assert.match(app, /data-image/);
+  assert.match(app, /note-popover/);
   assert.match(app, /hyperlinkNoteText/);
-  assert.match(app, /noteDotMarkup\(hyperlinkNoteText\(href, noteText\), href\)/);
+  assert.match(app, /noteDotMarkup\(hyperlinkNoteText\(href, noteText, image\), href, image\)/);
   assert.match(app, /let lastEditorRange/);
   assert.match(app, /rememberEditorSelection/);
   assert.match(app, /attachEditorSelectionMemory/);

@@ -91,12 +91,27 @@ function normalizePromptedLinkUrl(value) {
   return '';
 }
 
+function sanitizeImageUrl(value) {
+  const url = String(value ?? '').trim();
+  return /^https?:\/\//i.test(url) ? url : '';
+}
+
 function normalizeTextAlign(value) {
   return ['left', 'center', 'right'].includes(value) ? value : '';
 }
 
 function normalizeBlockIndent(value) {
   return value === 'none' ? 'none' : '';
+}
+
+function normalizeParagraphFont(value) {
+  return ['gothic', 'myungjo', 'latin-mix'].includes(value) ? value : '';
+}
+
+function normalizeBlockSizePt(value) {
+  const next = Number.parseFloat(value);
+  if (!Number.isFinite(next)) return null;
+  return String(Math.min(120, Math.max(6, next)));
 }
 
 function textFromHtml(html) {
@@ -121,8 +136,9 @@ function dateInputToIso(value) {
   return date ? `${date}T00:00:00.000Z` : null;
 }
 
-function noteDotMarkup(note = '', url = '') {
-  return `<button class="note-dot" type="button" contenteditable="false" data-note="${escapeHtml(note)}" data-url="${escapeHtml(url)}" aria-label="각주"></button>`;
+function noteDotMarkup(note = '', url = '', image = '') {
+  const imageAttr = image ? ` data-image="${escapeHtml(image)}"` : '';
+  return `<button class="note-dot" type="button" contenteditable="false" data-note="${escapeHtml(note)}" data-url="${escapeHtml(url)}"${imageAttr} aria-label="각주"></button>`;
 }
 
 function sanitizeInlineHtml(html) {
@@ -166,8 +182,9 @@ function sanitizeInlineHtml(html) {
     if (node.tagName === 'BUTTON' && node.classList.contains('note-dot')) {
       const note = String(node.dataset.note ?? '').trim();
       const url = sanitizeLinkUrl(node.dataset.url);
+      const image = sanitizeImageUrl(node.dataset.image);
       const next = document.createElement('template');
-      next.innerHTML = noteDotMarkup(note, url);
+      next.innerHTML = noteDotMarkup(note, url, image);
       node.replaceWith(next.content.firstElementChild);
       return;
     }
@@ -248,6 +265,8 @@ function normalizeBlocks(blocks, fallbackBody = '') {
       const lineHeight = normalizeBlockLineHeight(block?.lineHeight);
       const align = normalizeTextAlign(block?.align);
       const indent = normalizeBlockIndent(block?.indent);
+      const font = normalizeParagraphFont(block?.font);
+      const sizePt = normalizeBlockSizePt(block?.sizePt);
       if (!text && !html.replace(/<br\s*\/?>/gi, '').trim()) return null;
 
       return {
@@ -256,7 +275,9 @@ function normalizeBlocks(blocks, fallbackBody = '') {
         ...(html ? { html } : {}),
         ...(lineHeight ? { lineHeight } : {}),
         ...(align ? { align } : {}),
-        ...(indent ? { indent } : {})
+        ...(indent ? { indent } : {}),
+        ...(font ? { font } : {}),
+        ...(sizePt ? { sizePt } : {})
       };
     })
     .filter(Boolean);
@@ -580,16 +601,21 @@ function blockMarkup(block, options = {}) {
   const lineHeight = normalizeBlockLineHeight(block.lineHeight);
   const align = normalizeTextAlign(block.align);
   const indent = normalizeBlockIndent(block.indent);
+  const font = normalizeParagraphFont(block.font);
+  const sizePt = normalizeBlockSizePt(block.sizePt);
   const styles = [
     lineHeight ? `line-height: ${escapeHtml(lineHeight)}` : '',
     align ? `text-align: ${escapeHtml(align)}` : '',
-    indent ? 'text-indent: 0' : ''
+    indent ? 'text-indent: 0' : '',
+    sizePt ? `font-size: ${escapeHtml(sizePt)}pt` : ''
   ].filter(Boolean);
   const lineAttrs = [
     styles.length ? `style="${styles.join('; ')}"` : '',
     lineHeight ? `data-line-height="${escapeHtml(lineHeight)}"` : '',
     align ? `data-align="${escapeHtml(align)}"` : '',
-    indent ? `data-indent="${escapeHtml(indent)}"` : ''
+    indent ? `data-indent="${escapeHtml(indent)}"` : '',
+    font ? `data-font="${escapeHtml(font)}"` : '',
+    sizePt ? `data-size-pt="${escapeHtml(sizePt)}"` : ''
   ].filter(Boolean).join(' ');
   const firstTextAttr = options.firstTextBlock ? ' data-first-text-block="true"' : '';
   return `<p${firstTextAttr}${lineAttrs ? ` ${lineAttrs}` : ''}>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
@@ -695,6 +721,27 @@ function attachNoteDots(root) {
   if (root.dataset.noteDotsAttached === 'true') return;
   root.dataset.noteDotsAttached = 'true';
 
+  const closePopover = () => {
+    document.querySelector('.note-popover')?.remove();
+  };
+
+  const openPopover = (dot) => {
+    closePopover();
+    const image = sanitizeImageUrl(dot.dataset.image);
+    if (!image) return;
+
+    const popover = document.createElement('div');
+    popover.className = 'note-popover';
+    popover.innerHTML = `
+      ${dot.dataset.note ? `<p>${escapeHtml(dot.dataset.note)}</p>` : ''}
+      <img src="${escapeHtml(image)}" alt="">
+    `;
+    document.body.append(popover);
+    const rect = dot.getBoundingClientRect();
+    popover.style.left = `${Math.min(window.innerWidth - popover.offsetWidth - 12, Math.max(12, rect.left))}px`;
+    popover.style.top = `${Math.max(12, rect.bottom + 8)}px`;
+  };
+
   root.addEventListener('dblclick', (event) => {
     const dot = event.target.closest?.('.note-dot');
     const url = dot && root.contains(dot) ? sanitizeLinkUrl(dot.dataset.url) : '';
@@ -705,6 +752,7 @@ function attachNoteDots(root) {
     const dot = event.target.closest?.('.note-dot');
     if (!dot || !root.contains(dot)) {
       root.querySelectorAll('.note-dot.is-open').forEach((openDot) => openDot.classList.remove('is-open'));
+      closePopover();
       return;
     }
 
@@ -721,6 +769,11 @@ function attachNoteDots(root) {
       if (openDot !== dot) openDot.classList.remove('is-open');
     });
     dot.classList.toggle('is-open');
+    if (dot.classList.contains('is-open')) {
+      openPopover(dot);
+    } else {
+      closePopover();
+    }
   });
 }
 
@@ -916,6 +969,8 @@ function editorBlocksFromDom() {
       const lineHeight = normalizeBlockLineHeight(node.dataset.lineHeight || node.style.lineHeight);
       const align = normalizeTextAlign(node.dataset.align || node.style.textAlign);
       const indent = normalizeBlockIndent(node.dataset.indent);
+      const font = normalizeParagraphFont(node.dataset.font);
+      const sizePt = normalizeBlockSizePt(node.dataset.sizePt || node.style.fontSize);
       return text || html
         ? {
             type: 'text',
@@ -923,7 +978,9 @@ function editorBlocksFromDom() {
             ...(html ? { html } : {}),
             ...(lineHeight ? { lineHeight } : {}),
             ...(align ? { align } : {}),
-            ...(indent ? { indent } : {})
+            ...(indent ? { indent } : {}),
+            ...(font ? { font } : {}),
+            ...(sizePt ? { sizePt } : {})
           }
         : null;
     })
@@ -1083,7 +1140,9 @@ function imageFigureFromUpload(uploaded, file) {
   const image = document.createElement('img');
   image.src = uploaded.src;
   image.alt = uploaded.alt || file.name || 'uploaded image';
+  image.draggable = false;
   figure.append(image);
+  figure.draggable = true;
   applyImageFigureSettings(figure);
 
   return figure;
@@ -1180,7 +1239,6 @@ function insertImageNode(contentRoot, figure, event = null) {
 }
 
 function moveExistingImageBlock(contentRoot, figure, event) {
-  if (document.elementsFromPoint(event.clientX, event.clientY).includes(figure)) return;
   insertImageAtDropPoint(contentRoot, figure, event);
 }
 
@@ -1350,14 +1408,16 @@ function noteDotElement(value) {
   return template.content.firstElementChild;
 }
 
-function hyperlinkNoteText(href, noteText) {
-  return String(noteText ?? '').trim() || href;
+function hyperlinkNoteText(href, noteText, imageUrl = '') {
+  void imageUrl;
+  return String(noteText ?? '').trim() || href || '';
 }
 
-function hyperlinkNoteElement(url, noteText = '') {
+function hyperlinkNoteElement(url, noteText = '', imageUrl = '') {
   const href = normalizePromptedLinkUrl(url);
+  const image = sanitizeImageUrl(imageUrl);
   const template = document.createElement('template');
-  template.innerHTML = noteDotMarkup(hyperlinkNoteText(href, noteText), href);
+  template.innerHTML = noteDotMarkup(hyperlinkNoteText(href, noteText, image), href, image);
   return template.content.firstElementChild;
 }
 
@@ -1381,14 +1441,15 @@ function underlineSelection(contentRoot, statusRoot) {
 }
 
 function insertHyperlinkNote(contentRoot, statusRoot) {
-  const href = normalizePromptedLinkUrl(window.prompt('링크 주소를 입력하세요.'));
-  if (!href) {
-    statusRoot.textContent = '주소를 다시 확인해 주세요. 예: example.com 또는 https://example.com';
+  const href = normalizePromptedLinkUrl(window.prompt('링크 주소를 입력하세요. 비워두면 설명 각주만 들어갑니다.'));
+  const noteText = window.prompt('각주처럼 뜰 텍스트를 입력하세요.', href);
+  const imageUrl = sanitizeImageUrl(window.prompt('각주에 넣을 이미지 주소를 입력하세요. 없으면 비워두세요.'));
+  if (!href && !String(noteText ?? '').trim() && !imageUrl) {
+    statusRoot.textContent = '링크, 설명 텍스트, 이미지 중 하나는 필요합니다.';
     return;
   }
-  const noteText = window.prompt('각주처럼 뜰 텍스트를 입력하세요.', href);
 
-  insertInlineNode(contentRoot, hyperlinkNoteElement(href, noteText), { replaceSelection: false, beforeSelection: true });
+  insertInlineNode(contentRoot, hyperlinkNoteElement(href, noteText, imageUrl), { replaceSelection: false, beforeSelection: true });
   statusRoot.textContent = 'hyperlink note added. save to publish.';
 }
 
@@ -1420,9 +1481,31 @@ function removeIndentFromSelectedBlocks(contentRoot, statusRoot) {
   statusRoot.textContent = 'selected paragraph indent removed. save to publish.';
 }
 
+function applySelectedBlockStyle(contentRoot, root, statusRoot) {
+  const font = normalizeParagraphFont(root.querySelector('[name="paragraphFont"]')?.value);
+  const sizePt = normalizeBlockSizePt(root.querySelector('[name="paragraphSizePt"]')?.value);
+
+  selectedEditableBlocks(contentRoot).forEach((paragraph) => {
+    if (font) {
+      paragraph.dataset.font = font;
+    } else {
+      paragraph.removeAttribute('data-font');
+    }
+
+    if (sizePt) {
+      paragraph.dataset.sizePt = sizePt;
+      paragraph.style.fontSize = `${sizePt}pt`;
+    }
+  });
+  statusRoot.textContent = 'selected paragraph style changed. save to publish.';
+}
+
 function attachEditorFormatting(root, contentRoot, statusRoot) {
   attachEditorSelectionMemory(contentRoot);
-  root.querySelectorAll('[data-action="underline"], [data-action="link"], [data-action="indent-none"], [data-action^="align-"]').forEach((button) => {
+  root.querySelector('[data-panel="side"]')?.addEventListener('mousedown', () => {
+    rememberEditorSelection(contentRoot);
+  });
+  root.querySelectorAll('[data-panel="side"] button').forEach((button) => {
     button.addEventListener('mousedown', (event) => {
       event.preventDefault();
       rememberEditorSelection(contentRoot);
@@ -1451,6 +1534,10 @@ function attachEditorFormatting(root, contentRoot, statusRoot) {
 
   root.querySelector('[data-action="indent-none"]')?.addEventListener('click', () => {
     removeIndentFromSelectedBlocks(contentRoot, statusRoot);
+  });
+
+  root.querySelector('[data-action="paragraph-style"]')?.addEventListener('click', () => {
+    applySelectedBlockStyle(contentRoot, root, statusRoot);
   });
 }
 
@@ -1494,6 +1581,7 @@ function attachImageMove(root, contentRoot) {
     selectImageFigure(root, figure);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData(HYUN2_IMAGE_MOVE_TYPE, id);
+    event.dataTransfer.setData('text/plain', 'hyun2-image-move');
   });
 
   contentRoot.addEventListener('dragend', () => {
@@ -1837,6 +1925,20 @@ async function renderEditor(options = {}) {
               <span class="tool-icon tool-icon--align-right" aria-hidden="true"></span>
             </button>
           </div>
+          <label>
+            para font
+            <select name="paragraphFont">
+              <option value="">default</option>
+              <option value="gothic">gothic</option>
+              <option value="myungjo">myungjo</option>
+              <option value="latin-mix">latin mix</option>
+            </select>
+          </label>
+          <label>
+            para size
+            <span><input name="paragraphSizePt" type="number" min="6" max="120" step="1" placeholder="pt"> pt</span>
+          </label>
+          <button class="text-tool" type="button" data-action="paragraph-style">apply</button>
         </div>
 
         <div class="image-panel image-tools" data-panel="image" aria-label="이미지 옵션" hidden>

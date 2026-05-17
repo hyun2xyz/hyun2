@@ -4,6 +4,9 @@
   --line: #000;
   --muted: #555;
   --accent: #0645ff;
+  --font-gothic: "Source Han Sans KR", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+  --font-myungjo: "Source Han Serif KR", "Noto Serif KR", "Gowun Batang", serif;
+  --font-latin-mix: "Times New Roman", "Noto Serif KR", "Gowun Batang", serif;
   font-family:
     "Gowun Batang",
     "Apple SD Gothic Neo",
@@ -215,6 +218,22 @@ input {
   text-indent: 0;
 }
 
+.article__body p[data-font="gothic"] {
+  font-family: var(--font-gothic);
+}
+
+.article__body p[data-font="myungjo"] {
+  font-family: var(--font-myungjo);
+}
+
+.article__body p[data-font="latin-mix"] {
+  font-family: var(--font-latin-mix);
+}
+
+.article__body p[data-size-pt] {
+  font-size: inherit;
+}
+
 .article__body p[data-align="left"] {
   text-align: left;
 }
@@ -383,6 +402,37 @@ input {
   background: var(--fg);
   border: 1px solid var(--fg);
   transform: translateX(-50%);
+}
+
+.note-dot[data-image].is-open::after {
+  display: none;
+}
+
+.note-popover {
+  position: fixed;
+  z-index: 20;
+  max-width: min(280px, 72vw);
+  padding: 6px;
+  color: var(--bg);
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  font-size: 11px;
+  line-height: 1.25;
+  background: var(--fg);
+  border: 1px solid var(--fg);
+}
+
+.note-popover p {
+  margin: 0 0 6px;
+}
+
+.note-popover img {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .index-page {
