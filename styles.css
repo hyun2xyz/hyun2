@@ -1190,14 +1190,26 @@ input {
 
   .top-controls {
     position: static;
+    align-self: start;
     justify-content: flex-end;
-    margin-bottom: 22px;
+    margin: 0 0 22px;
+  }
+
+  .reader-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 16px;
+    align-items: start;
   }
 
   .reader-index {
     position: static;
     width: 100%;
     margin-bottom: 34px;
+  }
+
+  .reader-article {
+    grid-column: 1 / -1;
   }
 
   .admin-index,

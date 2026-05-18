@@ -1155,9 +1155,9 @@ function renderReader(article, posts = []) {
   applyTypeStyle(root, view.style);
 
   root.innerHTML = `
-    ${renderTopControls('reader-chrome')}
     <div class="reader-layout">
       ${renderReaderIndex(posts, view.slug)}
+      ${renderTopControls('reader-chrome')}
       <article class="reader-article">
         ${articleMarkup(view)}
       </article>

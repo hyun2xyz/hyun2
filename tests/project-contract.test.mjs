@@ -57,6 +57,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /isAdminPage/);
   assert.match(app, /supabase-client\.js\?v=/);
   assert.match(app, /data-panel="index"/);
+  assert.match(app, /reader-layout[\s\S]*renderReaderIndex\(posts, view\.slug\)[\s\S]*renderTopControls\('reader-chrome'\)/);
   assert.match(app, /name="titleSizePt"/);
   assert.match(app, /name="bodySizePt"/);
   assert.match(app, /name="bodyLineHeight"/);
@@ -392,7 +393,6 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /overflow-wrap:\s*anywhere/);
   assert.match(css, /\.reader-index[\s\S]*position:\s*fixed/);
   assert.match(css, /\.reader-layout[\s\S]*display:\s*block/);
-  assert.doesNotMatch(css, /\.reader-layout\s*\{[^}]*grid-template/);
   assert.match(css, /\.to-top-button/);
   assert.match(css, /\.to-top-button[\s\S]*border:\s*0/);
   assert.match(css, /\.to-top-button[\s\S]*opacity:\s*0/);
@@ -406,6 +406,8 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /transition:\s*opacity 140ms ease/);
   assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*\.top-controls[\s\S]*position:\s*static/);
   assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*\.reader-index[\s\S]*position:\s*static/);
+  assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*\.reader-layout[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/);
+  assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*\.reader-article[\s\S]*grid-column:\s*1 \/ -1/);
   assert.match(css, /\.button-link/);
   assert.doesNotMatch(css, /\.editor__tools/);
   assert.match(css, /\.editor__inline-tools/);
