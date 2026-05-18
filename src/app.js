@@ -108,7 +108,13 @@ function normalizeBlockIndent(value) {
 }
 
 function normalizeParagraphFont(value) {
-  return ['gothic', 'myungjo', 'latin-mix'].includes(value) ? value : '';
+  const legacyMap = {
+    gothic: 'apple-sd-gothic-neo',
+    myungjo: 'gowun-batang',
+    'latin-mix': 'times-new-roman'
+  };
+  const next = legacyMap[value] ?? value;
+  return ['ag-choijeongho-screen', 'gowun-batang', 'apple-sd-gothic-neo', 'times-new-roman'].includes(next) ? next : '';
 }
 
 function normalizeBlockSizePt(value) {
@@ -183,10 +189,38 @@ function sanitizeInlineHtml(html) {
       return;
     }
 
+    if (node.tagName === 'STRONG' || node.tagName === 'B') {
+      const strong = document.createElement('strong');
+      strong.append(...Array.from(node.childNodes));
+      node.replaceWith(strong);
+      return;
+    }
+
+    if (node.tagName === 'EM' || node.tagName === 'I') {
+      const emphasis = document.createElement('em');
+      emphasis.append(...Array.from(node.childNodes));
+      node.replaceWith(emphasis);
+      return;
+    }
+
     if (node.tagName === 'SPAN' && node.style.textDecoration.includes('underline')) {
       const underline = document.createElement('u');
       underline.append(...Array.from(node.childNodes));
       node.replaceWith(underline);
+      return;
+    }
+
+    if (node.tagName === 'SPAN' && (node.style.fontWeight === 'bold' || Number.parseInt(node.style.fontWeight, 10) >= 600)) {
+      const strong = document.createElement('strong');
+      strong.append(...Array.from(node.childNodes));
+      node.replaceWith(strong);
+      return;
+    }
+
+    if (node.tagName === 'SPAN' && node.style.fontStyle === 'italic') {
+      const emphasis = document.createElement('em');
+      emphasis.append(...Array.from(node.childNodes));
+      node.replaceWith(emphasis);
       return;
     }
 
@@ -785,15 +819,22 @@ function attachNoteDots(root) {
   const openPopover = (dot) => {
     closePopover();
     const image = sanitizeImageUrl(dot.dataset.image);
-    if (!image) return;
+    const note = String(dot.dataset.note ?? '').trim();
+    if (!image && !note) return;
 
     const popover = document.createElement('div');
     popover.className = 'note-popover';
     popover.innerHTML = `
-      <img src="${escapeHtml(image)}" alt="">
+      <button class="note-popover__close" type="button" aria-label="닫기">×</button>
+      ${image ? `<img src="${escapeHtml(image)}" alt="">` : ''}
       ${dot.dataset.note ? `<p>${escapeHtml(dot.dataset.note)}</p>` : ''}
     `;
     document.body.append(popover);
+    popover.querySelector('.note-popover__close')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      dot.classList.remove('is-open');
+      closePopover();
+    });
     popover.style.setProperty('--note-image-width', `${NOTE_IMAGE_WIDTH}px`);
     const rect = dot.getBoundingClientRect();
     popover.style.left = `${Math.min(window.innerWidth - popover.offsetWidth - 12, Math.max(12, rect.left))}px`;
@@ -1604,18 +1645,30 @@ function insertNoteDot(contentRoot, statusRoot) {
 }
 
 function underlineSelection(contentRoot, statusRoot) {
+  applyInlineCommand(contentRoot, statusRoot, () => document.execCommand('underline'), 'underline');
+}
+
+function boldSelection(contentRoot, statusRoot) {
+  applyInlineCommand(contentRoot, statusRoot, () => document.execCommand('bold'), 'bold');
+}
+
+function italicSelection(contentRoot, statusRoot) {
+  applyInlineCommand(contentRoot, statusRoot, () => document.execCommand('italic'), 'italic');
+}
+
+function applyInlineCommand(contentRoot, statusRoot, runCommand, label) {
   const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
   if (!range || range.collapsed) {
-    statusRoot.textContent = 'drag text first, then press underline.';
+    statusRoot.textContent = `drag text first, then press ${label}.`;
     return;
   }
 
   const selection = window.getSelection();
   selection.removeAllRanges();
   selection.addRange(range);
-  document.execCommand('underline');
+  runCommand();
   rememberEditorSelection(contentRoot);
-  statusRoot.textContent = 'underline added. save to publish.';
+  statusRoot.textContent = `${label} added. save to publish.`;
 }
 
 function insertHyperlinkNote(contentRoot, statusRoot) {
@@ -1737,6 +1790,16 @@ function attachEditorFormatting(root, contentRoot, statusRoot, session, article,
 
   root.querySelector('[data-action="underline"]')?.addEventListener('click', () => {
     underlineSelection(contentRoot, statusRoot);
+    history.commit();
+  });
+
+  root.querySelector('[data-action="bold"]')?.addEventListener('click', () => {
+    boldSelection(contentRoot, statusRoot);
+    history.commit();
+  });
+
+  root.querySelector('[data-action="italic"]')?.addEventListener('click', () => {
+    italicSelection(contentRoot, statusRoot);
     history.commit();
   });
 
@@ -2269,6 +2332,12 @@ async function renderEditor(options = {}) {
             <span><input name="indentPt" type="number" min="0" max="120" step="1" value="${style.indentPt}"> pt</span>
           </label>
           <div class="editor__inline-tools" data-panel="tools" aria-label="글 수정 도구">
+            <button class="text-tool icon-tool" type="button" data-action="bold" title="선택한 글자를 볼드" aria-label="볼드">
+              <span class="tool-icon tool-icon--bold" aria-hidden="true"></span>
+            </button>
+            <button class="text-tool icon-tool" type="button" data-action="italic" title="선택한 글자를 기울임" aria-label="기울임">
+              <span class="tool-icon tool-icon--italic" aria-hidden="true"></span>
+            </button>
             <button class="text-tool icon-tool" type="button" data-action="underline" title="선택한 글자에 밑줄" aria-label="밑줄">
               <span class="tool-icon tool-icon--underline" aria-hidden="true"></span>
             </button>
@@ -2298,9 +2367,10 @@ async function renderEditor(options = {}) {
             para font
             <select name="paragraphFont">
               <option value="">default</option>
-              <option value="gothic">gothic</option>
-              <option value="myungjo">myungjo</option>
-              <option value="latin-mix">latin mix</option>
+              <option value="ag-choijeongho-screen">AG Choijeongho Screen</option>
+              <option value="gowun-batang">Gowun Batang</option>
+              <option value="apple-sd-gothic-neo">Apple SD Gothic Neo</option>
+              <option value="times-new-roman">Times New Roman</option>
             </select>
           </label>
           <label>
