@@ -907,6 +907,7 @@ input {
 }
 
 .editor__settings {
+  --editor-label-width: 92px;
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
@@ -917,10 +918,11 @@ input {
 
 .editor__settings label {
   display: grid;
-  grid-template-columns: 68px minmax(0, 1fr);
+  grid-template-columns: var(--editor-label-width) minmax(0, 1fr);
   align-items: end;
   column-gap: 8px;
   min-width: 0;
+  text-align: left;
 }
 
 .editor__settings span {
@@ -947,7 +949,7 @@ input {
   display: flex;
   justify-content: flex-start;
   gap: 14px;
-  padding-left: 76px;
+  padding-left: calc(var(--editor-label-width) + 8px);
 }
 
 .editor__inline-tools {

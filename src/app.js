@@ -213,6 +213,27 @@ function writeParagraphStyleControls(root, style = {}) {
   if (indentField) indentField.value = normalizeParagraphIndentPt(style.indentPt) ?? '';
 }
 
+function defaultParagraphStyleControls(article = currentArticle()) {
+  const style = normalizeTypeSettings(article.style);
+  return {
+    font: '',
+    fontWeight: '',
+    sizePt: String(style.bodySizePt),
+    letterSpacing: '0',
+    indentPt: String(style.indentPt)
+  };
+}
+
+function paragraphControlFields(root) {
+  return Array.from(root.querySelectorAll([
+    '[name="paragraphFont"]',
+    '[name="paragraphWeight"]',
+    '[name="paragraphSizePt"]',
+    '[name="paragraphLetterSpacing"]',
+    '[name="paragraphIndentPt"]'
+  ].join(', ')));
+}
+
 function saveParagraphStylePreset(root, statusRoot) {
   const nameField = root.querySelector('[name="paragraphStylePresetName"]');
   const selectField = root.querySelector('[name="paragraphStylePreset"]');
@@ -227,7 +248,7 @@ function saveParagraphStylePreset(root, statusRoot) {
   statusRoot.textContent = `paragraph style "${name}" saved.`;
 }
 
-function applyParagraphStylePreset(root, statusRoot) {
+function applyParagraphStylePreset(root, statusRoot, options = {}) {
   const name = root.querySelector('[name="paragraphStylePreset"]')?.value;
   const preset = loadParagraphStylePresets()[name];
   if (!name || !preset) {
@@ -236,6 +257,12 @@ function applyParagraphStylePreset(root, statusRoot) {
   }
 
   writeParagraphStyleControls(root, preset);
+  if (options.contentRoot) {
+    applySelectedBlockStyle(options.contentRoot, root, statusRoot);
+    options.history?.commit();
+    statusRoot.textContent = `paragraph style "${name}" loaded and applied.`;
+    return;
+  }
   statusRoot.textContent = `paragraph style "${name}" loaded.`;
 }
 
@@ -2028,19 +2055,37 @@ function insertNoteDot(contentRoot, statusRoot) {
   statusRoot.textContent = 'note dot added. save to publish.';
 }
 
-function underlineSelection(contentRoot, statusRoot) {
-  applyInlineCommand(contentRoot, statusRoot, () => document.execCommand('underline'), 'underline');
+function unwrapInlineElement(element) {
+  const parent = element.parentNode;
+  if (!parent) return;
+
+  while (element.firstChild) parent.insertBefore(element.firstChild, element);
+  element.remove();
+  parent.normalize();
 }
 
-function boldSelection(contentRoot, statusRoot) {
-  applyInlineCommand(contentRoot, statusRoot, () => document.execCommand('bold'), 'bold');
+function matchingInlineElements(contentRoot, range, selector) {
+  const matches = new Set();
+  const addAncestor = (node) => {
+    let element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+    while (element && element !== contentRoot) {
+      if (element.matches?.(selector)) {
+        matches.add(element);
+        return;
+      }
+      element = element.parentElement;
+    }
+  };
+
+  addAncestor(range.startContainer);
+  addAncestor(range.endContainer);
+  contentRoot.querySelectorAll(selector).forEach((element) => {
+    if (range.intersectsNode(element)) matches.add(element);
+  });
+  return Array.from(matches).filter((element) => contentRoot.contains(element));
 }
 
-function italicSelection(contentRoot, statusRoot) {
-  applyInlineCommand(contentRoot, statusRoot, () => document.execCommand('italic'), 'italic');
-}
-
-function applyInlineCommand(contentRoot, statusRoot, runCommand, label) {
+function toggleInlineSelection(contentRoot, statusRoot, { tagName, selector, label }) {
   const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
   if (!range || range.collapsed) {
     statusRoot.textContent = `drag text first, then press ${label}.`;
@@ -2050,9 +2095,51 @@ function applyInlineCommand(contentRoot, statusRoot, runCommand, label) {
   const selection = window.getSelection();
   selection.removeAllRanges();
   selection.addRange(range);
-  runCommand();
-  rememberEditorSelection(contentRoot);
+
+  const existing = matchingInlineElements(contentRoot, range, selector);
+  if (existing.length) {
+    existing.forEach(unwrapInlineElement);
+    contentRoot.normalize();
+    lastEditorRange = null;
+    statusRoot.textContent = `${label} removed. save to publish.`;
+    return;
+  }
+
+  const wrapper = document.createElement(tagName);
+  const fragment = range.extractContents();
+  wrapper.append(fragment);
+  range.insertNode(wrapper);
+
+  const nextRange = document.createRange();
+  nextRange.selectNodeContents(wrapper);
+  selection.removeAllRanges();
+  selection.addRange(nextRange);
+  lastEditorRange = nextRange.cloneRange();
   statusRoot.textContent = `${label} added. save to publish.`;
+}
+
+function underlineSelection(contentRoot, statusRoot) {
+  toggleInlineSelection(contentRoot, statusRoot, {
+    tagName: 'u',
+    selector: 'u',
+    label: 'underline'
+  });
+}
+
+function boldSelection(contentRoot, statusRoot) {
+  toggleInlineSelection(contentRoot, statusRoot, {
+    tagName: 'strong',
+    selector: 'strong, b',
+    label: 'bold'
+  });
+}
+
+function italicSelection(contentRoot, statusRoot) {
+  toggleInlineSelection(contentRoot, statusRoot, {
+    tagName: 'em',
+    selector: 'em, i',
+    label: 'italic'
+  });
 }
 
 function insertHyperlinkNote(contentRoot, statusRoot) {
@@ -2258,16 +2345,34 @@ function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
   statusRoot.textContent = 'selected paragraph style cleared. save to publish.';
 }
 
+function applyParagraphStyleControlsImmediately(contentRoot, root, statusRoot, history) {
+  applySelectedBlockStyle(contentRoot, root, statusRoot);
+  history.commit();
+}
+
 function attachEditorFormatting(root, contentRoot, statusRoot, session, article, history) {
   attachEditorSelectionMemory(contentRoot);
   syncParagraphWeightOptions(root);
+  writeParagraphStyleControls(root, defaultParagraphStyleControls(article));
+
+  const autoApplyParagraphStyle = () => {
+    applyParagraphStyleControlsImmediately(contentRoot, root, statusRoot, history);
+  };
+
   root.querySelector('[name="paragraphFont"]')?.addEventListener('change', () => {
     syncParagraphWeightOptions(root);
-    history.commit();
+    autoApplyParagraphStyle();
+  });
+  paragraphControlFields(root).forEach((field) => {
+    const eventName = field.matches('select') ? 'change' : 'input';
+    if (field.name === 'paragraphFont') return;
+    field.addEventListener(eventName, autoApplyParagraphStyle);
   });
   root.querySelector('[name="paragraphStylePreset"]')?.addEventListener('change', (event) => {
     const nameField = root.querySelector('[name="paragraphStylePresetName"]');
     if (nameField) nameField.value = event.currentTarget.value;
+    const preset = loadParagraphStylePresets()[event.currentTarget.value];
+    if (preset) writeParagraphStyleControls(root, preset);
   });
   root.querySelector('[data-panel="side"]')?.addEventListener('mousedown', () => {
     rememberEditorSelection(contentRoot);
@@ -2357,8 +2462,7 @@ function attachEditorFormatting(root, contentRoot, statusRoot, session, article,
   });
 
   root.querySelector('[data-action="paragraph-style-load"]')?.addEventListener('click', () => {
-    applyParagraphStylePreset(root, statusRoot);
-    history.commit();
+    applyParagraphStylePreset(root, statusRoot, { contentRoot, history });
   });
 
   root.querySelector('[data-action="paragraph-style-delete-preset"]')?.addEventListener('click', () => {
@@ -2790,6 +2894,7 @@ async function renderEditor(options = {}) {
 
   const style = normalizeTypeSettings(article.style);
   const editLang = currentEditorLang();
+  const paragraphDefaults = defaultParagraphStyleControls(article);
   setCurrentArticle(article);
 
   const root = document.querySelector('#article-root');
@@ -2880,26 +2985,26 @@ async function renderEditor(options = {}) {
           <label>
             para font
             <select name="paragraphFont">
-              ${paragraphFontOptionsMarkup()}
+              ${paragraphFontOptionsMarkup(paragraphDefaults.font)}
             </select>
           </label>
           <label>
             weight
             <select name="paragraphWeight">
-              ${renderParagraphWeightOptions()}
+              ${renderParagraphWeightOptions(paragraphDefaults.font, paragraphDefaults.fontWeight)}
             </select>
           </label>
           <label>
             para size
-            <span><input name="paragraphSizePt" type="number" min="6" max="120" step="1" placeholder="pt"> pt</span>
+            <span><input name="paragraphSizePt" type="number" min="6" max="120" step="1" value="${escapeHtml(paragraphDefaults.sizePt)}"> pt</span>
           </label>
           <label>
             letter
-            <span><input name="paragraphLetterSpacing" type="number" min="-0.2" max="1" step="0.01" placeholder="em"> em</span>
+            <span><input name="paragraphLetterSpacing" type="number" min="-0.2" max="1" step="0.01" value="${escapeHtml(paragraphDefaults.letterSpacing)}"> em</span>
           </label>
           <label>
             indent
-            <span><input name="paragraphIndentPt" type="number" min="0" max="240" step="1" placeholder="pt"> pt</span>
+            <span><input name="paragraphIndentPt" type="number" min="0" max="240" step="1" value="${escapeHtml(paragraphDefaults.indentPt)}"> pt</span>
           </label>
           <label>
             style
