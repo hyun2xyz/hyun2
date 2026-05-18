@@ -19,6 +19,7 @@ test('home page renders a centered writing draft', async () => {
   assert.match(css, /--bg:\s*#fff/);
   assert.match(css, /--fg:\s*#000/);
   assert.match(html, /Gowun\+Batang/);
+  assert.match(html, /Noto\+Serif\+KR/);
   assert.doesNotMatch(app, /title:\s*'가안: 가운데에 놓인 글'/);
   assert.match(app, /centered-draft/);
   assert.match(app, /renderArticle/);
@@ -87,11 +88,15 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /applySelectedBlockStyle/);
   assert.match(app, /clearSelectedBlockStyle/);
   assert.match(app, /selectedCaptionFigure/);
+  assert.match(app, /selectedCaptionFigure && !selectionCoversContentRoot/);
   assert.match(app, /image caption style changed/);
   assert.match(app, /return;\s*\n\s*}/);
   assert.match(app, /name="paragraphFont"/);
   assert.match(app, /name="paragraphWeight"/);
   assert.match(app, /name="paragraphSizePt"/);
+  assert.match(app, /name="paragraphLetterSpacing"/);
+  assert.match(app, /normalizeLetterSpacing/);
+  assert.match(app, /letterSpacing/);
   assert.match(app, /PARAGRAPH_FONT_OPTIONS/);
   assert.match(app, /paragraphFontOptionsMarkup/);
   assert.match(app, /paragraphWeightsForFont/);
@@ -232,6 +237,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /Jibaek-260g-beta\.otf[\s\S]*font-weight:\s*260/);
   assert.match(css, /Jibaek-400g-beta\.otf[\s\S]*font-weight:\s*400/);
   assert.match(css, /--font-ag-choijeongho-screen/);
+  assert.match(css, /--font-ag-choijeongho-screen:[^;]*Noto Serif KR[^;]*Gowun Batang/);
   assert.match(css, /--font-sm3-gyeonchul-myeongjo/);
   assert.match(css, /--font-sm3-sinsin-myeongjo/);
   assert.match(css, /--font-times-lt-std/);
@@ -250,6 +256,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.article__body p\[data-font="gowun-batang"\]/);
   assert.match(css, /\.article__body p\[data-font="apple-sd-gothic-neo"\]/);
   assert.match(css, /\.article__body p\[data-size-pt\]/);
+  assert.match(css, /\.article__body p\[data-letter-spacing\]/);
+  assert.match(css, /\.article-image figcaption\[data-letter-spacing\]/);
   assert.match(css, /\.image-drop-indicator/);
   assert.match(css, /\.article__body p\[data-align="center"\]/);
   assert.match(css, /\.article__body p\[data-indent="none"\]/);

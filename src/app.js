@@ -174,6 +174,12 @@ function normalizeBlockSizePt(value) {
   return String(Math.min(120, Math.max(6, next)));
 }
 
+function normalizeLetterSpacing(value) {
+  const next = Number.parseFloat(value);
+  if (!Number.isFinite(next)) return null;
+  return String(Math.min(1, Math.max(-0.2, next)));
+}
+
 function normalizeImageHeight(value) {
   const next = Number.parseFloat(value);
   if (!Number.isFinite(next) || next <= 0) return null;
@@ -364,6 +370,7 @@ function normalizeBlocks(blocks, fallbackBody = '') {
         const height = normalizeImageHeight(block.height);
         const captionFont = normalizeParagraphFont(block.captionFont);
         const captionFontWeight = normalizeParagraphWeight(block.captionFontWeight, captionFont);
+        const captionLetterSpacing = normalizeLetterSpacing(block.captionLetterSpacing);
         return {
           type: 'image',
           src: String(block.src),
@@ -371,6 +378,7 @@ function normalizeBlocks(blocks, fallbackBody = '') {
           caption: String(block.caption ?? ''),
           ...(captionFont ? { captionFont } : {}),
           ...(captionFontWeight ? { captionFontWeight } : {}),
+          ...(captionLetterSpacing ? { captionLetterSpacing } : {}),
           ...(block.path ? { path: String(block.path) } : {}),
           width: Number.isFinite(width) ? Math.min(100, Math.max(18, width)) : 100,
           ...(height ? { height } : {}),
@@ -391,6 +399,7 @@ function normalizeBlocks(blocks, fallbackBody = '') {
       const font = normalizeParagraphFont(block?.font);
       const fontWeight = normalizeParagraphWeight(block?.fontWeight, font);
       const sizePt = normalizeBlockSizePt(block?.sizePt);
+      const letterSpacing = normalizeLetterSpacing(block?.letterSpacing);
       if (!text && !html.replace(/<br\s*\/?>/gi, '').trim()) return null;
 
       return {
@@ -402,7 +411,8 @@ function normalizeBlocks(blocks, fallbackBody = '') {
         ...(indent ? { indent } : {}),
         ...(font ? { font } : {}),
         ...(fontWeight ? { fontWeight } : {}),
-        ...(sizePt ? { sizePt } : {})
+        ...(sizePt ? { sizePt } : {}),
+        ...(letterSpacing ? { letterSpacing } : {})
       };
     })
     .filter(Boolean);
@@ -713,13 +723,16 @@ function imageBlockMarkup(block, options = {}) {
   const hasCaption = caption.trim().length > 0;
   const captionFont = normalizeParagraphFont(block.captionFont);
   const captionFontWeight = normalizeParagraphWeight(block.captionFontWeight, captionFont);
+  const captionLetterSpacing = normalizeLetterSpacing(block.captionLetterSpacing);
   const captionStyles = [
-    captionFontWeight ? `font-weight: ${escapeHtml(captionFontWeight)}` : ''
+    captionFontWeight ? `font-weight: ${escapeHtml(captionFontWeight)}` : '',
+    captionLetterSpacing ? `letter-spacing: ${escapeHtml(captionLetterSpacing)}em` : ''
   ].filter(Boolean).join('; ');
   const captionAttrs = [
     captionStyles ? `style="${captionStyles}"` : '',
     captionFont ? `data-font="${escapeHtml(captionFont)}"` : '',
-    captionFontWeight ? `data-font-weight="${escapeHtml(captionFontWeight)}"` : ''
+    captionFontWeight ? `data-font-weight="${escapeHtml(captionFontWeight)}"` : '',
+    captionLetterSpacing ? `data-letter-spacing="${escapeHtml(captionLetterSpacing)}"` : ''
   ].filter(Boolean).join(' ');
   const styles = [
     `--image-width: ${escapeHtml(width)}%`,
@@ -745,6 +758,7 @@ function imageBlockMarkup(block, options = {}) {
       data-caption="${escapeHtml(caption)}"
       ${captionFont ? `data-caption-font="${escapeHtml(captionFont)}"` : ''}
       ${captionFontWeight ? `data-caption-font-weight="${escapeHtml(captionFontWeight)}"` : ''}
+      ${captionLetterSpacing ? `data-caption-letter-spacing="${escapeHtml(captionLetterSpacing)}"` : ''}
       ${block.path ? `data-path="${escapeHtml(block.path)}"` : ''}
       draggable="false"
       style="${styles}"
@@ -765,12 +779,14 @@ function blockMarkup(block, options = {}) {
   const font = normalizeParagraphFont(block.font);
   const fontWeight = normalizeParagraphWeight(block.fontWeight, font);
   const sizePt = normalizeBlockSizePt(block.sizePt);
+  const letterSpacing = normalizeLetterSpacing(block.letterSpacing);
   const styles = [
     lineHeight ? `line-height: ${escapeHtml(lineHeight)}` : '',
     align ? `text-align: ${escapeHtml(align)}` : '',
     indent ? 'text-indent: 0' : '',
     fontWeight ? `font-weight: ${escapeHtml(fontWeight)}` : '',
-    sizePt ? `font-size: ${escapeHtml(sizePt)}pt` : ''
+    sizePt ? `font-size: ${escapeHtml(sizePt)}pt` : '',
+    letterSpacing ? `letter-spacing: ${escapeHtml(letterSpacing)}em` : ''
   ].filter(Boolean);
   const lineAttrs = [
     styles.length ? `style="${styles.join('; ')}"` : '',
@@ -779,7 +795,8 @@ function blockMarkup(block, options = {}) {
     indent ? `data-indent="${escapeHtml(indent)}"` : '',
     font ? `data-font="${escapeHtml(font)}"` : '',
     fontWeight ? `data-font-weight="${escapeHtml(fontWeight)}"` : '',
-    sizePt ? `data-size-pt="${escapeHtml(sizePt)}"` : ''
+    sizePt ? `data-size-pt="${escapeHtml(sizePt)}"` : '',
+    letterSpacing ? `data-letter-spacing="${escapeHtml(letterSpacing)}"` : ''
   ].filter(Boolean).join(' ');
   const firstTextAttr = options.firstTextBlock ? ' data-first-text-block="true"' : '';
   return `<p${firstTextAttr}${lineAttrs ? ` ${lineAttrs}` : ''}>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
@@ -1105,7 +1122,7 @@ function readDisplayDateFromDom(article) {
 }
 
 function editorHistoryFields(root) {
-  return Array.from(root.querySelectorAll('[name="displayDate"], [name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"], [name="paragraphFont"], [name="paragraphWeight"], [name="paragraphSizePt"]'));
+  return Array.from(root.querySelectorAll('[name="displayDate"], [name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"], [name="paragraphFont"], [name="paragraphWeight"], [name="paragraphSizePt"], [name="paragraphLetterSpacing"]'));
 }
 
 function snapshotEditorState(root, contentRoot) {
@@ -1233,6 +1250,7 @@ function editorBlocksFromDom() {
         const image = node.querySelector('img');
         const captionFont = normalizeParagraphFont(node.dataset.captionFont);
         const captionFontWeight = normalizeParagraphWeight(node.dataset.captionFontWeight, captionFont);
+        const captionLetterSpacing = normalizeLetterSpacing(node.dataset.captionLetterSpacing);
         return image?.src
           ? {
               type: 'image',
@@ -1241,6 +1259,7 @@ function editorBlocksFromDom() {
               caption: node.dataset.caption ?? '',
               ...(captionFont ? { captionFont } : {}),
               ...(captionFontWeight ? { captionFontWeight } : {}),
+              ...(captionLetterSpacing ? { captionLetterSpacing } : {}),
               ...(node.dataset.path ? { path: node.dataset.path } : {}),
               width: Number.parseFloat(node.dataset.width) || 100,
               ...(normalizeImageHeight(node.dataset.height) ? { height: normalizeImageHeight(node.dataset.height) } : {}),
@@ -1262,6 +1281,7 @@ function editorBlocksFromDom() {
       const font = normalizeParagraphFont(node.dataset.font);
       const fontWeight = normalizeParagraphWeight(node.dataset.fontWeight || node.style.fontWeight, font);
       const sizePt = normalizeBlockSizePt(node.dataset.sizePt || node.style.fontSize);
+      const letterSpacing = normalizeLetterSpacing(node.dataset.letterSpacing || node.style.letterSpacing);
       return text || html
         ? {
             type: 'text',
@@ -1272,7 +1292,8 @@ function editorBlocksFromDom() {
             ...(indent ? { indent } : {}),
             ...(font ? { font } : {}),
             ...(fontWeight ? { fontWeight } : {}),
-            ...(sizePt ? { sizePt } : {})
+            ...(sizePt ? { sizePt } : {}),
+            ...(letterSpacing ? { letterSpacing } : {})
           }
         : null;
     })
@@ -1396,6 +1417,7 @@ function applyImageFigureSettings(figure) {
   const hasCaption = caption.trim().length > 0;
   const captionFont = normalizeParagraphFont(figure.dataset.captionFont);
   const captionFontWeight = normalizeParagraphWeight(figure.dataset.captionFontWeight, captionFont);
+  const captionLetterSpacing = normalizeLetterSpacing(figure.dataset.captionLetterSpacing);
   figure.dataset.width = String(width);
   figure.dataset.align = align;
   figure.dataset.wrap = wrap ? 'true' : 'false';
@@ -1420,6 +1442,11 @@ function applyImageFigureSettings(figure) {
     figure.dataset.captionFontWeight = captionFontWeight;
   } else {
     delete figure.dataset.captionFontWeight;
+  }
+  if (captionLetterSpacing) {
+    figure.dataset.captionLetterSpacing = captionLetterSpacing;
+  } else {
+    delete figure.dataset.captionLetterSpacing;
   }
   figure.style.setProperty('--image-width', `${width}%`);
   figure.style.setProperty('--image-align', align);
@@ -1448,6 +1475,13 @@ function applyImageFigureSettings(figure) {
       } else {
         captionNode.removeAttribute('data-font-weight');
         captionNode.style.fontWeight = '';
+      }
+      if (captionLetterSpacing) {
+        captionNode.dataset.letterSpacing = captionLetterSpacing;
+        captionNode.style.letterSpacing = `${captionLetterSpacing}em`;
+      } else {
+        captionNode.removeAttribute('data-letter-spacing');
+        captionNode.style.letterSpacing = '';
       }
     } else {
       captionNode.remove();
@@ -1862,16 +1896,15 @@ function selectionCoversContentRoot(contentRoot, range) {
 
 function selectedImageFiguresForStyle(contentRoot, root) {
   const figures = Array.from(contentRoot.querySelectorAll('[data-block-type="image"]'));
-  const selectedFigure = selectedImageFigure(root);
-  if (selectedFigure && contentRoot.contains(selectedFigure)) return [selectedFigure];
-
   const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
   if (!range) return [];
   if (selectionCoversContentRoot(contentRoot, range)) return figures;
+  const selectedFigure = selectedImageFigure(root);
+  if (selectedFigure && contentRoot.contains(selectedFigure)) return [selectedFigure];
   return figures.filter((figure) => range.intersectsNode(figure));
 }
 
-function applyImageCaptionTypography(figure, { font, fontWeight }) {
+function applyImageCaptionTypography(figure, { font, fontWeight, letterSpacing }) {
   if (font) {
     figure.dataset.captionFont = font;
   } else {
@@ -1882,6 +1915,12 @@ function applyImageCaptionTypography(figure, { font, fontWeight }) {
     figure.dataset.captionFontWeight = fontWeight;
   } else {
     delete figure.dataset.captionFontWeight;
+  }
+
+  if (letterSpacing) {
+    figure.dataset.captionLetterSpacing = letterSpacing;
+  } else {
+    delete figure.dataset.captionLetterSpacing;
   }
 
   applyImageFigureSettings(figure);
@@ -1910,10 +1949,13 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
   const font = normalizeParagraphFont(root.querySelector('[name="paragraphFont"]')?.value);
   const fontWeight = normalizeParagraphWeight(root.querySelector('[name="paragraphWeight"]')?.value, font);
   const sizePt = normalizeBlockSizePt(root.querySelector('[name="paragraphSizePt"]')?.value);
+  const letterSpacing = normalizeLetterSpacing(root.querySelector('[name="paragraphLetterSpacing"]')?.value);
   const selectedCaptionFigure = selectedImageFigure(root);
+  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
+  const isWholeContentSelection = selectionCoversContentRoot(contentRoot, range);
 
-  if (selectedCaptionFigure && contentRoot.contains(selectedCaptionFigure)) {
-    applyImageCaptionTypography(selectedCaptionFigure, { font, fontWeight });
+  if (selectedCaptionFigure && !selectionCoversContentRoot(contentRoot, range) && contentRoot.contains(selectedCaptionFigure)) {
+    applyImageCaptionTypography(selectedCaptionFigure, { font, fontWeight, letterSpacing });
     statusRoot.textContent = 'image caption style changed. save to publish.';
     return;
   }
@@ -1937,18 +1979,24 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
       paragraph.dataset.sizePt = sizePt;
       paragraph.style.fontSize = `${sizePt}pt`;
     }
+
+    if (letterSpacing) {
+      paragraph.dataset.letterSpacing = letterSpacing;
+      paragraph.style.letterSpacing = `${letterSpacing}em`;
+    }
   });
   selectedImageFiguresForStyle(contentRoot, root).forEach((figure) => {
-    applyImageCaptionTypography(figure, { font, fontWeight });
+    applyImageCaptionTypography(figure, { font, fontWeight, letterSpacing });
   });
   statusRoot.textContent = 'selected paragraph style changed. save to publish.';
 }
 
 function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
   const selectedCaptionFigure = selectedImageFigure(root);
+  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
 
-  if (selectedCaptionFigure && contentRoot.contains(selectedCaptionFigure)) {
-    applyImageCaptionTypography(selectedCaptionFigure, { font: '', fontWeight: '' });
+  if (selectedCaptionFigure && !selectionCoversContentRoot(contentRoot, range) && contentRoot.contains(selectedCaptionFigure)) {
+    applyImageCaptionTypography(selectedCaptionFigure, { font: '', fontWeight: '', letterSpacing: '' });
     statusRoot.textContent = 'image caption style cleared. save to publish.';
     return;
   }
@@ -1957,18 +2005,22 @@ function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
     paragraph.removeAttribute('data-font');
     paragraph.removeAttribute('data-font-weight');
     paragraph.removeAttribute('data-size-pt');
+    paragraph.removeAttribute('data-letter-spacing');
     paragraph.style.fontWeight = '';
     paragraph.style.fontSize = '';
+    paragraph.style.letterSpacing = '';
   });
   selectedImageFiguresForStyle(contentRoot, root).forEach((figure) => {
-    applyImageCaptionTypography(figure, { font: '', fontWeight: '' });
+    applyImageCaptionTypography(figure, { font: '', fontWeight: '', letterSpacing: '' });
   });
   const fontField = root.querySelector('[name="paragraphFont"]');
   const weightField = root.querySelector('[name="paragraphWeight"]');
   const sizeField = root.querySelector('[name="paragraphSizePt"]');
+  const letterField = root.querySelector('[name="paragraphLetterSpacing"]');
   if (fontField) fontField.value = '';
   if (weightField) syncParagraphWeightOptions(root);
   if (sizeField) sizeField.value = '';
+  if (letterField) letterField.value = '';
   statusRoot.textContent = 'selected paragraph style cleared. save to publish.';
 }
 
@@ -2579,6 +2631,10 @@ async function renderEditor(options = {}) {
           <label>
             para size
             <span><input name="paragraphSizePt" type="number" min="6" max="120" step="1" placeholder="pt"> pt</span>
+          </label>
+          <label>
+            letter
+            <span><input name="paragraphLetterSpacing" type="number" min="-0.2" max="1" step="0.01" placeholder="em"> em</span>
           </label>
           <div class="editor__style-actions">
             <button class="text-tool" type="button" data-action="paragraph-style">apply</button>
