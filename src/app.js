@@ -20,6 +20,17 @@ const HYUN2_IMAGE_MOVE_TYPE = 'application/x-hyun2-image-move';
 const NOTE_IMAGE_WIDTH = 180;
 const DEFAULT_IMAGE_MARGIN_PT = 8;
 const DEFAULT_WRAP_GAP_PT = 16;
+const PARAGRAPH_FONT_OPTIONS = [
+  { value: '', label: 'default', weights: [] },
+  { value: 'ag-choijeongho-screen', label: 'AG Choijeongho Screen', weights: [] },
+  { value: 'sm3-gyeonchul-myeongjo', label: 'SM3 Gyeonchul Myeongjo', weights: ['400'] },
+  { value: 'sm3-sinsin-myeongjo', label: 'SM3 Sinsin Myeongjo', weights: ['400'] },
+  { value: 'times-lt-std', label: 'Times LT Std', weights: ['400'] },
+  { value: 'jibaek', label: 'Jibaek', weights: ['120', '260', '400'] },
+  { value: 'gowun-batang', label: 'Gowun Batang', weights: ['400', '700'] },
+  { value: 'apple-sd-gothic-neo', label: 'Apple SD Gothic Neo', weights: [] },
+  { value: 'times-new-roman', label: 'Times New Roman', weights: [] }
+];
 const DEFAULT_TYPE_SETTINGS = {
   titleSizePt: 44,
   bodySizePt: 20,
@@ -61,6 +72,7 @@ const isAdminPage = document.body.dataset.admin === 'true'
 const isIndexPage = routeParams.has('index')
   || routeParams.get('view') === 'index';
 let lastEditorRange = null;
+let editorSaveShortcutController = null;
 
 function splitParagraphs(content) {
   if (Array.isArray(content)) return content;
@@ -114,21 +126,46 @@ function normalizeParagraphFont(value) {
     'latin-mix': 'times-new-roman'
   };
   const next = legacyMap[value] ?? value;
-  return [
-    'ag-choijeongho-screen',
-    'sm3-gyeonchul-myeongjo',
-    'sm3-sinsin-myeongjo',
-    'times-lt-std',
-    'jibaek',
-    'gowun-batang',
-    'apple-sd-gothic-neo',
-    'times-new-roman'
-  ].includes(next) ? next : '';
+  return PARAGRAPH_FONT_OPTIONS.some((option) => option.value === next) ? next : '';
 }
 
-function normalizeParagraphWeight(value) {
+function paragraphFontOption(font) {
+  const normalized = normalizeParagraphFont(font);
+  return PARAGRAPH_FONT_OPTIONS.find((option) => option.value === normalized) ?? PARAGRAPH_FONT_OPTIONS[0];
+}
+
+function paragraphWeightsForFont(font) {
+  return paragraphFontOption(font).weights;
+}
+
+function normalizeParagraphWeight(value, font = '') {
   const next = String(value ?? '').trim();
-  return ['120', '260', '400', '700'].includes(next) ? next : '';
+  return paragraphWeightsForFont(font).includes(next) ? next : '';
+}
+
+function paragraphFontOptionsMarkup(selected = '') {
+  const current = normalizeParagraphFont(selected);
+  return PARAGRAPH_FONT_OPTIONS
+    .map((option) => `<option value="${escapeHtml(option.value)}"${option.value === current ? ' selected' : ''}>${escapeHtml(option.label)}</option>`)
+    .join('');
+}
+
+function renderParagraphWeightOptions(font = '', selected = '') {
+  const currentFont = normalizeParagraphFont(font);
+  const weights = paragraphWeightsForFont(currentFont);
+  const current = normalizeParagraphWeight(selected, currentFont);
+  return [
+    `<option value="">default</option>`,
+    ...weights.map((weight) => `<option value="${escapeHtml(weight)}"${weight === current ? ' selected' : ''}>${escapeHtml(weight)}</option>`)
+  ].join('');
+}
+
+function syncParagraphWeightOptions(root) {
+  const fontField = root.querySelector('[name="paragraphFont"]');
+  const weightField = root.querySelector('[name="paragraphWeight"]');
+  if (!fontField || !weightField) return;
+  const currentWeight = weightField.value;
+  weightField.innerHTML = renderParagraphWeightOptions(fontField.value, currentWeight);
 }
 
 function normalizeBlockSizePt(value) {
@@ -325,11 +362,15 @@ function normalizeBlocks(blocks, fallbackBody = '') {
         const wrap = Boolean(block.wrap);
         const margins = imageMarginDefaults({ align, wrap });
         const height = normalizeImageHeight(block.height);
+        const captionFont = normalizeParagraphFont(block.captionFont);
+        const captionFontWeight = normalizeParagraphWeight(block.captionFontWeight, captionFont);
         return {
           type: 'image',
           src: String(block.src),
           alt: String(block.alt ?? ''),
           caption: String(block.caption ?? ''),
+          ...(captionFont ? { captionFont } : {}),
+          ...(captionFontWeight ? { captionFontWeight } : {}),
           ...(block.path ? { path: String(block.path) } : {}),
           width: Number.isFinite(width) ? Math.min(100, Math.max(18, width)) : 100,
           ...(height ? { height } : {}),
@@ -348,7 +389,7 @@ function normalizeBlocks(blocks, fallbackBody = '') {
       const align = normalizeTextAlign(block?.align);
       const indent = normalizeBlockIndent(block?.indent);
       const font = normalizeParagraphFont(block?.font);
-      const fontWeight = normalizeParagraphWeight(block?.fontWeight);
+      const fontWeight = normalizeParagraphWeight(block?.fontWeight, font);
       const sizePt = normalizeBlockSizePt(block?.sizePt);
       if (!text && !html.replace(/<br\s*\/?>/gi, '').trim()) return null;
 
@@ -668,7 +709,18 @@ function imageBlockMarkup(block, options = {}) {
   const marginRight = normalizeImageMarginPt(block.marginRight, defaults.right);
   const marginBottom = normalizeImageMarginPt(block.marginBottom, defaults.bottom);
   const marginLeft = normalizeImageMarginPt(block.marginLeft, defaults.left);
-  const caption = String(block.caption ?? '').trim();
+  const caption = String(block.caption ?? '');
+  const hasCaption = caption.trim().length > 0;
+  const captionFont = normalizeParagraphFont(block.captionFont);
+  const captionFontWeight = normalizeParagraphWeight(block.captionFontWeight, captionFont);
+  const captionStyles = [
+    captionFontWeight ? `font-weight: ${escapeHtml(captionFontWeight)}` : ''
+  ].filter(Boolean).join('; ');
+  const captionAttrs = [
+    captionStyles ? `style="${captionStyles}"` : '',
+    captionFont ? `data-font="${escapeHtml(captionFont)}"` : '',
+    captionFontWeight ? `data-font-weight="${escapeHtml(captionFontWeight)}"` : ''
+  ].filter(Boolean).join(' ');
   const styles = [
     `--image-width: ${escapeHtml(width)}%`,
     `--image-align: ${escapeHtml(align)}`,
@@ -691,13 +743,15 @@ function imageBlockMarkup(block, options = {}) {
       data-align="${escapeHtml(align)}"
       data-wrap="${wrap ? 'true' : 'false'}"
       data-caption="${escapeHtml(caption)}"
+      ${captionFont ? `data-caption-font="${escapeHtml(captionFont)}"` : ''}
+      ${captionFontWeight ? `data-caption-font-weight="${escapeHtml(captionFontWeight)}"` : ''}
       ${block.path ? `data-path="${escapeHtml(block.path)}"` : ''}
       draggable="false"
       style="${styles}"
       contenteditable="false"
     >
       <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt ?? '')}" draggable="false">
-      ${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}
+      ${hasCaption ? `<figcaption${captionAttrs ? ` ${captionAttrs}` : ''}>${escapeHtml(caption)}</figcaption>` : ''}
       ${options.editable ? '<button class="image-resize-handle" type="button" data-image-resize-handle aria-label="이미지 크기 조절"></button>' : ''}
     </figure>
   `;
@@ -709,7 +763,7 @@ function blockMarkup(block, options = {}) {
   const align = normalizeTextAlign(block.align);
   const indent = normalizeBlockIndent(block.indent);
   const font = normalizeParagraphFont(block.font);
-  const fontWeight = normalizeParagraphWeight(block.fontWeight);
+  const fontWeight = normalizeParagraphWeight(block.fontWeight, font);
   const sizePt = normalizeBlockSizePt(block.sizePt);
   const styles = [
     lineHeight ? `line-height: ${escapeHtml(lineHeight)}` : '',
@@ -783,6 +837,7 @@ function articleMarkup(article, options = {}) {
 }
 
 export function renderArticle(article) {
+  clearEditorSaveShortcut();
   const root = document.querySelector('#article-root');
   const view = normalizeArticle(article);
   applyTypeStyle(root, view.style);
@@ -996,6 +1051,7 @@ function renderReader(article, posts = []) {
 }
 
 function renderLogin(statusText = '') {
+  clearEditorSaveShortcut();
   const root = document.querySelector('#article-root');
 
   root.innerHTML = `
@@ -1072,6 +1128,7 @@ function restoreEditorState(root, contentRoot, statusRoot, state) {
   editorHistoryFields(root).forEach((field) => {
     if (Object.prototype.hasOwnProperty.call(state.values, field.name)) field.value = state.values[field.name];
   });
+  syncParagraphWeightOptions(root);
 
   const publishButton = root.querySelector('[data-action="publish"]');
   if (publishButton) {
@@ -1142,6 +1199,23 @@ function createEditorHistory(root, contentRoot, statusRoot) {
   return history;
 }
 
+function clearEditorSaveShortcut() {
+  editorSaveShortcutController?.abort();
+  editorSaveShortcutController = null;
+}
+
+function attachEditorSaveShortcut(saveHandler) {
+  clearEditorSaveShortcut();
+  editorSaveShortcutController = new AbortController();
+  document.addEventListener('keydown', async (event) => {
+    if (!(event.metaKey || event.ctrlKey)) return;
+    if (event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      await saveHandler();
+    }
+  }, { signal: editorSaveShortcutController.signal });
+}
+
 function editorBlocksFromDom() {
   const contentRoot = document.querySelector('[data-field="content"]');
   if (!contentRoot) return [];
@@ -1157,12 +1231,16 @@ function editorBlocksFromDom() {
 
       if (node.matches('[data-block-type="image"]')) {
         const image = node.querySelector('img');
+        const captionFont = normalizeParagraphFont(node.dataset.captionFont);
+        const captionFontWeight = normalizeParagraphWeight(node.dataset.captionFontWeight, captionFont);
         return image?.src
           ? {
               type: 'image',
               src: image.src,
               alt: image.alt,
               caption: node.dataset.caption ?? '',
+              ...(captionFont ? { captionFont } : {}),
+              ...(captionFontWeight ? { captionFontWeight } : {}),
               ...(node.dataset.path ? { path: node.dataset.path } : {}),
               width: Number.parseFloat(node.dataset.width) || 100,
               ...(normalizeImageHeight(node.dataset.height) ? { height: normalizeImageHeight(node.dataset.height) } : {}),
@@ -1182,7 +1260,7 @@ function editorBlocksFromDom() {
       const align = normalizeTextAlign(node.dataset.align || node.style.textAlign);
       const indent = normalizeBlockIndent(node.dataset.indent);
       const font = normalizeParagraphFont(node.dataset.font);
-      const fontWeight = normalizeParagraphWeight(node.dataset.fontWeight || node.style.fontWeight);
+      const fontWeight = normalizeParagraphWeight(node.dataset.fontWeight || node.style.fontWeight, font);
       const sizePt = normalizeBlockSizePt(node.dataset.sizePt || node.style.fontSize);
       return text || html
         ? {
@@ -1314,7 +1392,10 @@ function applyImageFigureSettings(figure) {
   const marginRight = normalizeImageMarginPt(figure.dataset.marginRight, defaults.right);
   const marginBottom = normalizeImageMarginPt(figure.dataset.marginBottom, defaults.bottom);
   const marginLeft = normalizeImageMarginPt(figure.dataset.marginLeft, defaults.left);
-  const caption = String(figure.dataset.caption ?? '').trim();
+  const caption = String(figure.dataset.caption ?? '');
+  const hasCaption = caption.trim().length > 0;
+  const captionFont = normalizeParagraphFont(figure.dataset.captionFont);
+  const captionFontWeight = normalizeParagraphWeight(figure.dataset.captionFontWeight, captionFont);
   figure.dataset.width = String(width);
   figure.dataset.align = align;
   figure.dataset.wrap = wrap ? 'true' : 'false';
@@ -1330,6 +1411,16 @@ function applyImageFigureSettings(figure) {
   figure.dataset.marginBottom = String(marginBottom);
   figure.dataset.marginLeft = String(marginLeft);
   figure.dataset.caption = caption;
+  if (captionFont) {
+    figure.dataset.captionFont = captionFont;
+  } else {
+    delete figure.dataset.captionFont;
+  }
+  if (captionFontWeight) {
+    figure.dataset.captionFontWeight = captionFontWeight;
+  } else {
+    delete figure.dataset.captionFontWeight;
+  }
   figure.style.setProperty('--image-width', `${width}%`);
   figure.style.setProperty('--image-align', align);
   figure.style.setProperty('--image-margin-top', `${marginTop}pt`);
@@ -1338,14 +1429,26 @@ function applyImageFigureSettings(figure) {
   figure.style.setProperty('--image-margin-left', `${marginLeft}pt`);
   figure.classList.toggle('article-image--wrap', wrap);
   let captionNode = figure.querySelector('figcaption');
-  if (caption && !captionNode) {
+  if (hasCaption && !captionNode) {
     captionNode = document.createElement('figcaption');
     const resizeHandle = figure.querySelector('[data-image-resize-handle]');
     figure.insertBefore(captionNode, resizeHandle ?? null);
   }
   if (captionNode) {
-    if (caption) {
+    if (hasCaption) {
       captionNode.textContent = caption;
+      if (captionFont) {
+        captionNode.dataset.font = captionFont;
+      } else {
+        captionNode.removeAttribute('data-font');
+      }
+      if (captionFontWeight) {
+        captionNode.dataset.fontWeight = captionFontWeight;
+        captionNode.style.fontWeight = captionFontWeight;
+      } else {
+        captionNode.removeAttribute('data-font-weight');
+        captionNode.style.fontWeight = '';
+      }
     } else {
       captionNode.remove();
     }
@@ -1736,9 +1839,48 @@ function selectedEditableBlocks(contentRoot) {
   const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
   const paragraphs = Array.from(contentRoot.querySelectorAll('p'));
   if (!range) return paragraphs.slice(0, 1);
+  if (selectionCoversContentRoot(contentRoot, range)) return paragraphs;
 
   const selected = paragraphs.filter((paragraph) => range.intersectsNode(paragraph));
   return selected.length ? selected : paragraphs.slice(0, 1);
+}
+
+function selectionCoversContentRoot(contentRoot, range) {
+  if (!range || !contentRoot) return false;
+  if (range.startContainer === contentRoot && range.endContainer === contentRoot) return true;
+  if (range.commonAncestorContainer === contentRoot) {
+    const blocks = Array.from(contentRoot.children);
+    return blocks.length > 0 && blocks.every((block) => range.intersectsNode(block));
+  }
+  return range.intersectsNode(contentRoot)
+    && Array.from(contentRoot.children).every((block) => range.intersectsNode(block));
+}
+
+function selectedImageFiguresForStyle(contentRoot, root) {
+  const figures = Array.from(contentRoot.querySelectorAll('[data-block-type="image"]'));
+  const selectedFigure = selectedImageFigure(root);
+  if (selectedFigure && contentRoot.contains(selectedFigure)) return [selectedFigure];
+
+  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
+  if (!range) return [];
+  if (selectionCoversContentRoot(contentRoot, range)) return figures;
+  return figures.filter((figure) => range.intersectsNode(figure));
+}
+
+function applyImageCaptionTypography(figure, { font, fontWeight }) {
+  if (font) {
+    figure.dataset.captionFont = font;
+  } else {
+    delete figure.dataset.captionFont;
+  }
+
+  if (fontWeight) {
+    figure.dataset.captionFontWeight = fontWeight;
+  } else {
+    delete figure.dataset.captionFontWeight;
+  }
+
+  applyImageFigureSettings(figure);
 }
 
 function alignSelectedBlocks(contentRoot, statusRoot, align) {
@@ -1762,7 +1904,7 @@ function removeIndentFromSelectedBlocks(contentRoot, statusRoot) {
 
 function applySelectedBlockStyle(contentRoot, root, statusRoot) {
   const font = normalizeParagraphFont(root.querySelector('[name="paragraphFont"]')?.value);
-  const fontWeight = normalizeParagraphWeight(root.querySelector('[name="paragraphWeight"]')?.value);
+  const fontWeight = normalizeParagraphWeight(root.querySelector('[name="paragraphWeight"]')?.value, font);
   const sizePt = normalizeBlockSizePt(root.querySelector('[name="paragraphSizePt"]')?.value);
 
   selectedEditableBlocks(contentRoot).forEach((paragraph) => {
@@ -1785,6 +1927,9 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
       paragraph.style.fontSize = `${sizePt}pt`;
     }
   });
+  selectedImageFiguresForStyle(contentRoot, root).forEach((figure) => {
+    applyImageCaptionTypography(figure, { font, fontWeight });
+  });
   statusRoot.textContent = 'selected paragraph style changed. save to publish.';
 }
 
@@ -1796,17 +1941,25 @@ function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
     paragraph.style.fontWeight = '';
     paragraph.style.fontSize = '';
   });
+  selectedImageFiguresForStyle(contentRoot, root).forEach((figure) => {
+    applyImageCaptionTypography(figure, { font: '', fontWeight: '' });
+  });
   const fontField = root.querySelector('[name="paragraphFont"]');
   const weightField = root.querySelector('[name="paragraphWeight"]');
   const sizeField = root.querySelector('[name="paragraphSizePt"]');
   if (fontField) fontField.value = '';
-  if (weightField) weightField.value = '';
+  if (weightField) syncParagraphWeightOptions(root);
   if (sizeField) sizeField.value = '';
   statusRoot.textContent = 'selected paragraph style cleared. save to publish.';
 }
 
 function attachEditorFormatting(root, contentRoot, statusRoot, session, article, history) {
   attachEditorSelectionMemory(contentRoot);
+  syncParagraphWeightOptions(root);
+  root.querySelector('[name="paragraphFont"]')?.addEventListener('change', () => {
+    syncParagraphWeightOptions(root);
+    history.commit();
+  });
   root.querySelector('[data-panel="side"]')?.addEventListener('mousedown', () => {
     rememberEditorSelection(contentRoot);
   });
@@ -2395,25 +2548,13 @@ async function renderEditor(options = {}) {
           <label>
             para font
             <select name="paragraphFont">
-              <option value="">default</option>
-              <option value="ag-choijeongho-screen">AG Choijeongho Screen</option>
-              <option value="sm3-gyeonchul-myeongjo">SM3 Gyeonchul Myeongjo</option>
-              <option value="sm3-sinsin-myeongjo">SM3 Sinsin Myeongjo</option>
-              <option value="times-lt-std">Times LT Std</option>
-              <option value="jibaek">Jibaek</option>
-              <option value="gowun-batang">Gowun Batang</option>
-              <option value="apple-sd-gothic-neo">Apple SD Gothic Neo</option>
-              <option value="times-new-roman">Times New Roman</option>
+              ${paragraphFontOptionsMarkup()}
             </select>
           </label>
           <label>
             weight
             <select name="paragraphWeight">
-              <option value="">default</option>
-              <option value="120">120</option>
-              <option value="260">260</option>
-              <option value="400">400</option>
-              <option value="700">700</option>
+              ${renderParagraphWeightOptions()}
             </select>
           </label>
           <label>
@@ -2452,7 +2593,7 @@ async function renderEditor(options = {}) {
           </label>
           <label>
             각주
-            <input name="imageCaption" type="text" placeholder="이미지 밑 설명">
+            <textarea name="imageCaption" rows="3" placeholder="이미지 밑 설명"></textarea>
           </label>
           <div>
             <button type="button" data-image-action="left">왼쪽</button>
@@ -2553,7 +2694,7 @@ async function renderEditor(options = {}) {
     await renderEditor({ statusText: `trash failed: ${saveFailureMessage(result.reason)}` });
   });
 
-  root.querySelector('[data-action="save"]').addEventListener('click', async () => {
+  const saveCurrentArticle = async () => {
     const nextArticle = editorArticleFromDom(article, session);
     saveLocalDraft(nextArticle);
 
@@ -2584,7 +2725,10 @@ async function renderEditor(options = {}) {
     }
 
     await renderEditor({ statusText: `local saved. Supabase failed: ${saveFailureMessage(result.reason)}` });
-  });
+  };
+
+  root.querySelector('[data-action="save"]').addEventListener('click', saveCurrentArticle);
+  attachEditorSaveShortcut(saveCurrentArticle);
 
   root.querySelector('[data-action="logout"]')?.addEventListener('click', async () => {
     clearSession();

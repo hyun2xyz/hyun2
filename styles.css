@@ -419,6 +419,55 @@ input {
   font-size: 0.72em;
   line-height: 1.3;
   color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.article-image figcaption[data-font="ag-choijeongho-screen"] {
+  font-family: var(--font-ag-choijeongho-screen);
+}
+
+.article-image figcaption[data-font="sm3-gyeonchul-myeongjo"] {
+  font-family: var(--font-sm3-gyeonchul-myeongjo);
+}
+
+.article-image figcaption[data-font="sm3-sinsin-myeongjo"] {
+  font-family: var(--font-sm3-sinsin-myeongjo);
+}
+
+.article-image figcaption[data-font="times-lt-std"] {
+  font-family: var(--font-times-lt-std);
+}
+
+.article-image figcaption[data-font="jibaek"] {
+  font-family: var(--font-jibaek);
+}
+
+.article-image figcaption[data-font="gowun-batang"] {
+  font-family: var(--font-gowun-batang);
+}
+
+.article-image figcaption[data-font="apple-sd-gothic-neo"] {
+  font-family: var(--font-apple-sd-gothic-neo);
+}
+
+.article-image figcaption[data-font="times-new-roman"] {
+  font-family: var(--font-latin-mix);
+}
+
+.article-image figcaption[data-font-weight="120"] {
+  font-weight: 120;
+}
+
+.article-image figcaption[data-font-weight="260"] {
+  font-weight: 260;
+}
+
+.article-image figcaption[data-font-weight="400"] {
+  font-weight: 400;
+}
+
+.article-image figcaption[data-font-weight="700"] {
+  font-weight: 700;
 }
 
 .article-image:active img {
@@ -772,10 +821,19 @@ input {
   margin-bottom: 10px;
 }
 
-.image-panel input {
+.image-panel input,
+.image-panel textarea {
   width: 100%;
   padding: 0;
   border: 0;
+}
+
+.image-panel textarea {
+  min-height: 4.4em;
+  resize: vertical;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
 }
 
 .image-panel div {

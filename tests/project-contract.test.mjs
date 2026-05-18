@@ -89,6 +89,19 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /name="paragraphFont"/);
   assert.match(app, /name="paragraphWeight"/);
   assert.match(app, /name="paragraphSizePt"/);
+  assert.match(app, /PARAGRAPH_FONT_OPTIONS/);
+  assert.match(app, /paragraphFontOptionsMarkup/);
+  assert.match(app, /paragraphWeightsForFont/);
+  assert.match(app, /renderParagraphWeightOptions/);
+  assert.match(app, /syncParagraphWeightOptions/);
+  assert.match(app, /normalizeParagraphWeight\(.*font/);
+  assert.match(app, /selectionCoversContentRoot/);
+  assert.match(app, /selectedImageFiguresForStyle/);
+  assert.match(app, /applyImageCaptionTypography/);
+  assert.match(app, /data-caption-font/);
+  assert.match(app, /data-caption-font-weight/);
+  assert.match(app, /captionFont/);
+  assert.match(app, /captionFontWeight/);
   assert.match(app, /data-action="paragraph-style"/);
   assert.match(app, /data-action="paragraph-style-clear"/);
   assert.match(app, /selectedEditableBlocks/);
@@ -121,6 +134,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /name="imageMarginBottom"/);
   assert.match(app, /name="imageMarginLeft"/);
   assert.match(app, /name="imageCaption"/);
+  assert.match(app, /<textarea name="imageCaption"/);
+  assert.doesNotMatch(app, /<input name="imageCaption"/);
   assert.match(app, /data-caption/);
   assert.match(app, /figcaption/);
   assert.match(app, />왼쪽</);
@@ -138,6 +153,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /restoreEditorState/);
   assert.match(app, /history\.commit/);
   assert.match(app, /event\.metaKey \|\| event\.ctrlKey/);
+  assert.match(app, /attachEditorSaveShortcut/);
+  assert.match(app, /event\.key\.toLowerCase\(\) === 's'/);
+  assert.match(app, /event\.preventDefault\(\)/);
   assert.match(app, /selected paragraph style changed/);
   assert.match(app, /status: draft/);
   assert.match(app, /status = publishEnabled\(\) \? 'published' : 'draft'/);
@@ -185,6 +203,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /--image-margin-left/);
   assert.match(css, /--image-height/);
   assert.match(css, /\.article-image figcaption/);
+  assert.match(css, /\.article-image figcaption[\s\S]*white-space:\s*pre-wrap/);
+  assert.match(css, /\.article-image figcaption\[data-font="jibaek"\]/);
+  assert.match(css, /\.article-image figcaption\[data-font-weight="260"\]/);
   assert.match(css, /float:\s*left/);
   assert.match(css, /float:\s*right/);
   assert.match(css, /\.image-panel/);
