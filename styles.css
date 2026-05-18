@@ -1,3 +1,51 @@
+@font-face {
+  font-family: "SM3 Gyeonchul Myeongjo";
+  src: url("./fonts/SM3GyeonchulMyeongjo-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SM3 Sinsin Myeongjo";
+  src: url("./fonts/SM3SinsinMyeongjo-02.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Times LT Std";
+  src: url("./fonts/TimesLTStd-Italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Jibaek";
+  src: url("./fonts/Jibaek-120g-beta.otf") format("opentype");
+  font-weight: 120;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Jibaek";
+  src: url("./fonts/Jibaek-260g-beta.otf") format("opentype");
+  font-weight: 260;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Jibaek";
+  src: url("./fonts/Jibaek-400g-beta.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #fff;
   --fg: #000;
@@ -6,6 +54,10 @@
   --accent: #0645ff;
   --note-color: #d11c24;
   --font-ag-choijeongho-screen: "AG Choijeongho Screen", "ag-choijeongho-screen", "Source Han Serif KR", "Noto Serif KR", "Gowun Batang", serif;
+  --font-sm3-gyeonchul-myeongjo: "SM3 Gyeonchul Myeongjo", "Gowun Batang", "Source Han Serif KR", serif;
+  --font-sm3-sinsin-myeongjo: "SM3 Sinsin Myeongjo", "Gowun Batang", "Source Han Serif KR", serif;
+  --font-times-lt-std: "Times LT Std", "Times New Roman", serif;
+  --font-jibaek: "Jibaek", "Gowun Batang", "Source Han Serif KR", serif;
   --font-gowun-batang: "Gowun Batang", "Source Han Serif KR", "Noto Serif KR", serif;
   --font-apple-sd-gothic-neo: "Apple SD Gothic Neo", "Source Han Sans KR", "Noto Sans KR", sans-serif;
   --font-latin-mix: "Times New Roman", "Gowun Batang", "Noto Serif KR", serif;
@@ -239,6 +291,22 @@ input {
   font-family: var(--font-ag-choijeongho-screen);
 }
 
+.article__body p[data-font="sm3-gyeonchul-myeongjo"] {
+  font-family: var(--font-sm3-gyeonchul-myeongjo);
+}
+
+.article__body p[data-font="sm3-sinsin-myeongjo"] {
+  font-family: var(--font-sm3-sinsin-myeongjo);
+}
+
+.article__body p[data-font="times-lt-std"] {
+  font-family: var(--font-times-lt-std);
+}
+
+.article__body p[data-font="jibaek"] {
+  font-family: var(--font-jibaek);
+}
+
 .article__body p[data-font="gowun-batang"] {
   font-family: var(--font-gowun-batang);
 }
@@ -253,6 +321,22 @@ input {
 
 .article__body p[data-size-pt] {
   font-size: inherit;
+}
+
+.article__body p[data-font-weight="120"] {
+  font-weight: 120;
+}
+
+.article__body p[data-font-weight="260"] {
+  font-weight: 260;
+}
+
+.article__body p[data-font-weight="400"] {
+  font-weight: 400;
+}
+
+.article__body p[data-font-weight="700"] {
+  font-weight: 700;
 }
 
 .article__body p[data-align="left"] {

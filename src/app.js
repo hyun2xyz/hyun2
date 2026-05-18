@@ -114,7 +114,21 @@ function normalizeParagraphFont(value) {
     'latin-mix': 'times-new-roman'
   };
   const next = legacyMap[value] ?? value;
-  return ['ag-choijeongho-screen', 'gowun-batang', 'apple-sd-gothic-neo', 'times-new-roman'].includes(next) ? next : '';
+  return [
+    'ag-choijeongho-screen',
+    'sm3-gyeonchul-myeongjo',
+    'sm3-sinsin-myeongjo',
+    'times-lt-std',
+    'jibaek',
+    'gowun-batang',
+    'apple-sd-gothic-neo',
+    'times-new-roman'
+  ].includes(next) ? next : '';
+}
+
+function normalizeParagraphWeight(value) {
+  const next = String(value ?? '').trim();
+  return ['120', '260', '400', '700'].includes(next) ? next : '';
 }
 
 function normalizeBlockSizePt(value) {
@@ -334,6 +348,7 @@ function normalizeBlocks(blocks, fallbackBody = '') {
       const align = normalizeTextAlign(block?.align);
       const indent = normalizeBlockIndent(block?.indent);
       const font = normalizeParagraphFont(block?.font);
+      const fontWeight = normalizeParagraphWeight(block?.fontWeight);
       const sizePt = normalizeBlockSizePt(block?.sizePt);
       if (!text && !html.replace(/<br\s*\/?>/gi, '').trim()) return null;
 
@@ -345,6 +360,7 @@ function normalizeBlocks(blocks, fallbackBody = '') {
         ...(align ? { align } : {}),
         ...(indent ? { indent } : {}),
         ...(font ? { font } : {}),
+        ...(fontWeight ? { fontWeight } : {}),
         ...(sizePt ? { sizePt } : {})
       };
     })
@@ -693,11 +709,13 @@ function blockMarkup(block, options = {}) {
   const align = normalizeTextAlign(block.align);
   const indent = normalizeBlockIndent(block.indent);
   const font = normalizeParagraphFont(block.font);
+  const fontWeight = normalizeParagraphWeight(block.fontWeight);
   const sizePt = normalizeBlockSizePt(block.sizePt);
   const styles = [
     lineHeight ? `line-height: ${escapeHtml(lineHeight)}` : '',
     align ? `text-align: ${escapeHtml(align)}` : '',
     indent ? 'text-indent: 0' : '',
+    fontWeight ? `font-weight: ${escapeHtml(fontWeight)}` : '',
     sizePt ? `font-size: ${escapeHtml(sizePt)}pt` : ''
   ].filter(Boolean);
   const lineAttrs = [
@@ -706,6 +724,7 @@ function blockMarkup(block, options = {}) {
     align ? `data-align="${escapeHtml(align)}"` : '',
     indent ? `data-indent="${escapeHtml(indent)}"` : '',
     font ? `data-font="${escapeHtml(font)}"` : '',
+    fontWeight ? `data-font-weight="${escapeHtml(fontWeight)}"` : '',
     sizePt ? `data-size-pt="${escapeHtml(sizePt)}"` : ''
   ].filter(Boolean).join(' ');
   const firstTextAttr = options.firstTextBlock ? ' data-first-text-block="true"' : '';
@@ -1035,7 +1054,7 @@ function readDisplayDateFromDom(article) {
 }
 
 function editorHistoryFields(root) {
-  return Array.from(root.querySelectorAll('[name="displayDate"], [name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"], [name="paragraphFont"], [name="paragraphSizePt"]'));
+  return Array.from(root.querySelectorAll('[name="displayDate"], [name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"], [name="paragraphFont"], [name="paragraphWeight"], [name="paragraphSizePt"]'));
 }
 
 function snapshotEditorState(root, contentRoot) {
@@ -1168,6 +1187,7 @@ function editorBlocksFromDom() {
       const align = normalizeTextAlign(node.dataset.align || node.style.textAlign);
       const indent = normalizeBlockIndent(node.dataset.indent);
       const font = normalizeParagraphFont(node.dataset.font);
+      const fontWeight = normalizeParagraphWeight(node.dataset.fontWeight || node.style.fontWeight);
       const sizePt = normalizeBlockSizePt(node.dataset.sizePt || node.style.fontSize);
       return text || html
         ? {
@@ -1178,6 +1198,7 @@ function editorBlocksFromDom() {
             ...(align ? { align } : {}),
             ...(indent ? { indent } : {}),
             ...(font ? { font } : {}),
+            ...(fontWeight ? { fontWeight } : {}),
             ...(sizePt ? { sizePt } : {})
           }
         : null;
@@ -1746,6 +1767,7 @@ function removeIndentFromSelectedBlocks(contentRoot, statusRoot) {
 
 function applySelectedBlockStyle(contentRoot, root, statusRoot) {
   const font = normalizeParagraphFont(root.querySelector('[name="paragraphFont"]')?.value);
+  const fontWeight = normalizeParagraphWeight(root.querySelector('[name="paragraphWeight"]')?.value);
   const sizePt = normalizeBlockSizePt(root.querySelector('[name="paragraphSizePt"]')?.value);
 
   selectedEditableBlocks(contentRoot).forEach((paragraph) => {
@@ -1753,6 +1775,14 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
       paragraph.dataset.font = font;
     } else {
       paragraph.removeAttribute('data-font');
+    }
+
+    if (fontWeight) {
+      paragraph.dataset.fontWeight = fontWeight;
+      paragraph.style.fontWeight = fontWeight;
+    } else {
+      paragraph.removeAttribute('data-font-weight');
+      paragraph.style.fontWeight = '';
     }
 
     if (sizePt) {
@@ -1766,12 +1796,16 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
 function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
   selectedEditableBlocks(contentRoot).forEach((paragraph) => {
     paragraph.removeAttribute('data-font');
+    paragraph.removeAttribute('data-font-weight');
     paragraph.removeAttribute('data-size-pt');
+    paragraph.style.fontWeight = '';
     paragraph.style.fontSize = '';
   });
   const fontField = root.querySelector('[name="paragraphFont"]');
+  const weightField = root.querySelector('[name="paragraphWeight"]');
   const sizeField = root.querySelector('[name="paragraphSizePt"]');
   if (fontField) fontField.value = '';
+  if (weightField) weightField.value = '';
   if (sizeField) sizeField.value = '';
   statusRoot.textContent = 'selected paragraph style cleared. save to publish.';
 }
@@ -2368,9 +2402,23 @@ async function renderEditor(options = {}) {
             <select name="paragraphFont">
               <option value="">default</option>
               <option value="ag-choijeongho-screen">AG Choijeongho Screen</option>
+              <option value="sm3-gyeonchul-myeongjo">SM3 Gyeonchul Myeongjo</option>
+              <option value="sm3-sinsin-myeongjo">SM3 Sinsin Myeongjo</option>
+              <option value="times-lt-std">Times LT Std</option>
+              <option value="jibaek">Jibaek</option>
               <option value="gowun-batang">Gowun Batang</option>
               <option value="apple-sd-gothic-neo">Apple SD Gothic Neo</option>
               <option value="times-new-roman">Times New Roman</option>
+            </select>
+          </label>
+          <label>
+            weight
+            <select name="paragraphWeight">
+              <option value="">default</option>
+              <option value="120">120</option>
+              <option value="260">260</option>
+              <option value="400">400</option>
+              <option value="700">700</option>
             </select>
           </label>
           <label>
