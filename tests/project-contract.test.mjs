@@ -143,9 +143,14 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /name="imageMarginRight"/);
   assert.match(app, /name="imageMarginBottom"/);
   assert.match(app, /name="imageMarginLeft"/);
+  assert.match(app, /min="-240"/);
+  assert.match(app, /normalizeImageMarginPt\(value, fallback = DEFAULT_IMAGE_MARGIN_PT\)[\s\S]*Math\.max\(-240/);
   assert.match(app, /name="imageCaption"/);
   assert.match(app, /<textarea name="imageCaption"/);
   assert.doesNotMatch(app, /<input name="imageCaption"/);
+  assert.match(app, /data-image-action="delete"/);
+  assert.match(app, /deleteSelectedImageFigure/);
+  assert.match(app, /image deleted\. save to publish/);
   assert.match(app, /data-caption/);
   assert.match(app, /figcaption/);
   assert.match(app, />왼쪽</);

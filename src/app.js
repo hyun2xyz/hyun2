@@ -189,7 +189,7 @@ function normalizeImageHeight(value) {
 function normalizeImageMarginPt(value, fallback = DEFAULT_IMAGE_MARGIN_PT) {
   const next = Number.parseFloat(value);
   if (!Number.isFinite(next)) return fallback;
-  return Math.min(240, Math.max(0, next));
+  return Math.min(240, Math.max(-240, next));
 }
 
 function imageMarginDefaults({ align = 'center', wrap = false } = {}) {
@@ -1530,6 +1530,16 @@ function clearSelectedImageFigure(root) {
   syncImagePanel(root, null);
 }
 
+function deleteSelectedImageFigure(root, statusRoot, history) {
+  const figure = selectedImageFigure(root);
+  if (!figure) return;
+
+  figure.remove();
+  syncImagePanel(root, null);
+  statusRoot.textContent = 'image deleted. save to publish.';
+  history.commit();
+}
+
 function isEditorSidePanelClick(event) {
   return Boolean(event.target.closest?.('[data-panel="side"]'));
 }
@@ -2297,6 +2307,11 @@ function attachImageControls(root, contentRoot, statusRoot, history) {
       : event.target.closest?.('[data-block-type="image"]');
     if (!action || !figure || !root.contains(figure)) return;
 
+    if (action === 'delete') {
+      deleteSelectedImageFigure(root, statusRoot, history);
+      return;
+    }
+
     if (action === 'smaller') {
       figure.dataset.width = String(Math.max(18, (Number.parseFloat(figure.dataset.width) || 100) - 10));
     } else if (action === 'larger') {
@@ -2654,19 +2669,19 @@ async function renderEditor(options = {}) {
           </label>
           <label>
             위
-            <input name="imageMarginTop" type="number" min="0" max="240" step="1" placeholder="pt">
+            <input name="imageMarginTop" type="number" min="-240" max="240" step="1" placeholder="pt">
           </label>
           <label>
             오른쪽
-            <input name="imageMarginRight" type="number" min="0" max="240" step="1" placeholder="pt">
+            <input name="imageMarginRight" type="number" min="-240" max="240" step="1" placeholder="pt">
           </label>
           <label>
             아래
-            <input name="imageMarginBottom" type="number" min="0" max="240" step="1" placeholder="pt">
+            <input name="imageMarginBottom" type="number" min="-240" max="240" step="1" placeholder="pt">
           </label>
           <label>
             왼쪽
-            <input name="imageMarginLeft" type="number" min="0" max="240" step="1" placeholder="pt">
+            <input name="imageMarginLeft" type="number" min="-240" max="240" step="1" placeholder="pt">
           </label>
           <label>
             각주
@@ -2677,6 +2692,7 @@ async function renderEditor(options = {}) {
             <button type="button" data-image-action="center">가운데</button>
             <button type="button" data-image-action="right">오른쪽</button>
             <button type="button" data-image-action="wrap">감싸기</button>
+            <button type="button" data-image-action="delete">삭제</button>
           </div>
         </div>
       </aside>
