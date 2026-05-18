@@ -1496,6 +1496,10 @@ function clearSelectedImageFigure(root) {
   syncImagePanel(root, null);
 }
 
+function isEditorSidePanelClick(event) {
+  return Boolean(event.target.closest?.('[data-panel="side"]'));
+}
+
 function imageFigureFromUpload(uploaded, file) {
   const figure = document.createElement('figure');
   figure.className = 'article-image';
@@ -2176,7 +2180,7 @@ function attachImageControls(root, contentRoot, statusRoot, history) {
       return;
     }
 
-    if (!event.target.closest?.('[data-panel="image"]')) {
+    if (!event.target.closest?.('[data-panel="image"]') && !isEditorSidePanelClick(event)) {
       clearSelectedImageFigure(root);
     }
   });

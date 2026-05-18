@@ -127,6 +127,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /image\.draggable = false/);
   assert.match(app, /selectImageFigure/);
   assert.match(app, /syncImagePanel/);
+  assert.match(app, /isEditorSidePanelClick/);
+  assert.match(app, /closest\?\.\('\[data-panel="side"\]'\)/);
   assert.match(app, /name="imageWidth"/);
   assert.match(app, /name="imageHeight"/);
   assert.match(app, /name="imageMarginTop"/);
