@@ -86,6 +86,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /removeIndentFromSelectedBlocks/);
   assert.match(app, /applySelectedBlockStyle/);
   assert.match(app, /clearSelectedBlockStyle/);
+  assert.match(app, /selectedCaptionFigure/);
+  assert.match(app, /image caption style changed/);
+  assert.match(app, /return;\s*\n\s*}/);
   assert.match(app, /name="paragraphFont"/);
   assert.match(app, /name="paragraphWeight"/);
   assert.match(app, /name="paragraphSizePt"/);
@@ -213,8 +216,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.image-panel/);
   assert.match(css, /\.editor-side-panel/);
   assert.match(css, /\.editor-side-panel[\s\S]*position:\s*fixed/);
-  assert.match(css, /input\[name="displayDate"\][\s\S]*width:\s*128px/);
-  assert.match(css, /\.editor__inline-tools[\s\S]*flex-basis:\s*100%/);
+  assert.match(css, /input\[name="displayDate"\][\s\S]*width:\s*100%/);
+  assert.match(css, /\.editor__inline-tools[\s\S]*display:\s*inline-flex/);
   assert.match(css, /\.editor-align-tools/);
   assert.match(css, /\.icon-tool/);
   assert.match(css, /\.tool-icon--link/);
@@ -364,7 +367,7 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /overflow-wrap:\s*anywhere/);
   assert.match(css, /\.reader-index[\s\S]*position:\s*fixed/);
   assert.match(css, /\.reader-layout[\s\S]*display:\s*block/);
-  assert.doesNotMatch(css, /display:\s*grid|grid-template/);
+  assert.doesNotMatch(css, /\.reader-layout\s*\{[^}]*grid-template/);
   assert.match(css, /\.to-top-button/);
   assert.match(css, /\.to-top-button[\s\S]*border:\s*0/);
   assert.match(css, /\.to-top-button[\s\S]*opacity:\s*0/);
@@ -384,6 +387,8 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /\.text-tool/);
   assert.match(css, /\.editor__settings[\s\S]*border-top:\s*0/);
   assert.match(css, /\.editor__inline-tools[\s\S]*padding-top:\s*0/);
+  assert.match(css, /\.editor__settings label[\s\S]*grid-template-columns:\s*68px minmax\(0,\s*1fr\)/);
+  assert.match(css, /\.editor__style-actions[\s\S]*display:\s*flex/);
   assert.match(css, /\.text-tool[\s\S]*font-size:\s*inherit/);
   assert.match(css, /\.note-dot/);
   assert.match(css, /counter-reset:\s*note-number/);

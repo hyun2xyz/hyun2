@@ -1910,6 +1910,13 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
   const font = normalizeParagraphFont(root.querySelector('[name="paragraphFont"]')?.value);
   const fontWeight = normalizeParagraphWeight(root.querySelector('[name="paragraphWeight"]')?.value, font);
   const sizePt = normalizeBlockSizePt(root.querySelector('[name="paragraphSizePt"]')?.value);
+  const selectedCaptionFigure = selectedImageFigure(root);
+
+  if (selectedCaptionFigure && contentRoot.contains(selectedCaptionFigure)) {
+    applyImageCaptionTypography(selectedCaptionFigure, { font, fontWeight });
+    statusRoot.textContent = 'image caption style changed. save to publish.';
+    return;
+  }
 
   selectedEditableBlocks(contentRoot).forEach((paragraph) => {
     if (font) {
@@ -1938,6 +1945,14 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
 }
 
 function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
+  const selectedCaptionFigure = selectedImageFigure(root);
+
+  if (selectedCaptionFigure && contentRoot.contains(selectedCaptionFigure)) {
+    applyImageCaptionTypography(selectedCaptionFigure, { font: '', fontWeight: '' });
+    statusRoot.textContent = 'image caption style cleared. save to publish.';
+    return;
+  }
+
   selectedEditableBlocks(contentRoot).forEach((paragraph) => {
     paragraph.removeAttribute('data-font');
     paragraph.removeAttribute('data-font-weight');
@@ -2565,8 +2580,10 @@ async function renderEditor(options = {}) {
             para size
             <span><input name="paragraphSizePt" type="number" min="6" max="120" step="1" placeholder="pt"> pt</span>
           </label>
-          <button class="text-tool" type="button" data-action="paragraph-style">apply</button>
-          <button class="text-tool" type="button" data-action="paragraph-style-clear">delete</button>
+          <div class="editor__style-actions">
+            <button class="text-tool" type="button" data-action="paragraph-style">apply</button>
+            <button class="text-tool" type="button" data-action="paragraph-style-clear">delete</button>
+          </div>
         </div>
 
         <div class="image-panel image-tools" data-panel="image" aria-label="이미지 옵션" hidden>
