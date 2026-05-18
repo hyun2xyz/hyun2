@@ -95,8 +95,19 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /name="paragraphWeight"/);
   assert.match(app, /name="paragraphSizePt"/);
   assert.match(app, /name="paragraphLetterSpacing"/);
+  assert.match(app, /name="paragraphIndentPt"/);
   assert.match(app, /normalizeLetterSpacing/);
+  assert.match(app, /normalizeParagraphIndentPt/);
   assert.match(app, /letterSpacing/);
+  assert.match(app, /indentPt/);
+  assert.match(app, /PARAGRAPH_STYLE_PRESETS_KEY/);
+  assert.match(app, /hyun2\.paragraphStylePresets/);
+  assert.match(app, /name="paragraphStylePreset"/);
+  assert.match(app, /name="paragraphStylePresetName"/);
+  assert.match(app, /data-action="paragraph-style-save"/);
+  assert.match(app, /data-action="paragraph-style-load"/);
+  assert.match(app, /saveParagraphStylePreset/);
+  assert.match(app, /applyParagraphStylePreset/);
   assert.match(app, /PARAGRAPH_FONT_OPTIONS/);
   assert.match(app, /paragraphFontOptionsMarkup/);
   assert.match(app, /paragraphWeightsForFont/);
@@ -261,6 +272,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.article__body p\[data-font="gowun-batang"\]/);
   assert.match(css, /\.article__body p\[data-font="apple-sd-gothic-neo"\]/);
   assert.match(css, /\.article__body p\[data-size-pt\]/);
+  assert.match(css, /\.article__body p\[data-indent-pt\]/);
   assert.match(css, /\.article__body p\[data-letter-spacing\]/);
   assert.match(css, /\.article-image figcaption\[data-letter-spacing\]/);
   assert.match(css, /\.image-drop-indicator/);

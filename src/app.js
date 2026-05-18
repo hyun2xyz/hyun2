@@ -16,6 +16,7 @@ const SESSION_KEY = 'hyun2.supabaseSession';
 const THEME_KEY = 'hyun2.theme';
 const LANG_KEY = 'hyun2.lang';
 const TYPE_SETTINGS_KEY = 'hyun2.typeSettings';
+const PARAGRAPH_STYLE_PRESETS_KEY = 'hyun2.paragraphStylePresets';
 const HYUN2_IMAGE_MOVE_TYPE = 'application/x-hyun2-image-move';
 const NOTE_IMAGE_WIDTH = 180;
 const DEFAULT_IMAGE_MARGIN_PT = 8;
@@ -168,6 +169,86 @@ function syncParagraphWeightOptions(root) {
   weightField.innerHTML = renderParagraphWeightOptions(fontField.value, currentWeight);
 }
 
+function paragraphStylePresetOptionsMarkup(selected = '') {
+  const presets = loadParagraphStylePresets();
+  const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
+  return [
+    `<option value="">style preset</option>`,
+    ...names.map((name) => `<option value="${escapeHtml(name)}"${name === selected ? ' selected' : ''}>${escapeHtml(name)}</option>`)
+  ].join('');
+}
+
+function syncParagraphStylePresetOptions(root, selected = root.querySelector('[name="paragraphStylePreset"]')?.value ?? '') {
+  const field = root.querySelector('[name="paragraphStylePreset"]');
+  if (!field) return;
+  field.innerHTML = paragraphStylePresetOptionsMarkup(selected);
+}
+
+function readParagraphStyleControls(root) {
+  const font = normalizeParagraphFont(root.querySelector('[name="paragraphFont"]')?.value);
+  return {
+    font,
+    fontWeight: normalizeParagraphWeight(root.querySelector('[name="paragraphWeight"]')?.value, font),
+    sizePt: normalizeBlockSizePt(root.querySelector('[name="paragraphSizePt"]')?.value),
+    letterSpacing: normalizeLetterSpacing(root.querySelector('[name="paragraphLetterSpacing"]')?.value),
+    indentPt: normalizeParagraphIndentPt(root.querySelector('[name="paragraphIndentPt"]')?.value)
+  };
+}
+
+function writeParagraphStyleControls(root, style = {}) {
+  const font = normalizeParagraphFont(style.font);
+  const fontField = root.querySelector('[name="paragraphFont"]');
+  const sizeField = root.querySelector('[name="paragraphSizePt"]');
+  const letterField = root.querySelector('[name="paragraphLetterSpacing"]');
+  const indentField = root.querySelector('[name="paragraphIndentPt"]');
+
+  if (fontField) fontField.value = font;
+  syncParagraphWeightOptions(root);
+
+  const weightField = root.querySelector('[name="paragraphWeight"]');
+  if (weightField) weightField.value = normalizeParagraphWeight(style.fontWeight, font);
+  if (sizeField) sizeField.value = normalizeBlockSizePt(style.sizePt) ?? '';
+  if (letterField) letterField.value = normalizeLetterSpacing(style.letterSpacing) ?? '';
+  if (indentField) indentField.value = normalizeParagraphIndentPt(style.indentPt) ?? '';
+}
+
+function saveParagraphStylePreset(root, statusRoot) {
+  const nameField = root.querySelector('[name="paragraphStylePresetName"]');
+  const selectField = root.querySelector('[name="paragraphStylePreset"]');
+  const name = String(nameField?.value || selectField?.value || 'style 1').trim().slice(0, 40);
+  if (!name) return;
+
+  const presets = loadParagraphStylePresets();
+  presets[name] = readParagraphStyleControls(root);
+  saveParagraphStylePresets(presets);
+  syncParagraphStylePresetOptions(root, name);
+  if (nameField) nameField.value = name;
+  statusRoot.textContent = `paragraph style "${name}" saved.`;
+}
+
+function applyParagraphStylePreset(root, statusRoot) {
+  const name = root.querySelector('[name="paragraphStylePreset"]')?.value;
+  const preset = loadParagraphStylePresets()[name];
+  if (!name || !preset) {
+    statusRoot.textContent = 'choose a paragraph style preset first.';
+    return;
+  }
+
+  writeParagraphStyleControls(root, preset);
+  statusRoot.textContent = `paragraph style "${name}" loaded.`;
+}
+
+function deleteParagraphStylePreset(root, statusRoot) {
+  const name = root.querySelector('[name="paragraphStylePreset"]')?.value;
+  if (!name) return;
+
+  const presets = loadParagraphStylePresets();
+  delete presets[name];
+  saveParagraphStylePresets(presets);
+  syncParagraphStylePresetOptions(root, '');
+  statusRoot.textContent = `paragraph style "${name}" deleted.`;
+}
+
 function normalizeBlockSizePt(value) {
   const next = Number.parseFloat(value);
   if (!Number.isFinite(next)) return null;
@@ -178,6 +259,12 @@ function normalizeLetterSpacing(value) {
   const next = Number.parseFloat(value);
   if (!Number.isFinite(next)) return null;
   return String(Math.min(1, Math.max(-0.2, next)));
+}
+
+function normalizeParagraphIndentPt(value) {
+  const next = Number.parseFloat(value);
+  if (!Number.isFinite(next)) return null;
+  return String(Math.min(240, Math.max(0, next)));
 }
 
 function normalizeImageHeight(value) {
@@ -400,6 +487,7 @@ function normalizeBlocks(blocks, fallbackBody = '') {
       const fontWeight = normalizeParagraphWeight(block?.fontWeight, font);
       const sizePt = normalizeBlockSizePt(block?.sizePt);
       const letterSpacing = normalizeLetterSpacing(block?.letterSpacing);
+      const indentPt = normalizeParagraphIndentPt(block?.indentPt);
       if (!text && !html.replace(/<br\s*\/?>/gi, '').trim()) return null;
 
       return {
@@ -412,7 +500,8 @@ function normalizeBlocks(blocks, fallbackBody = '') {
         ...(font ? { font } : {}),
         ...(fontWeight ? { fontWeight } : {}),
         ...(sizePt ? { sizePt } : {}),
-        ...(letterSpacing ? { letterSpacing } : {})
+        ...(letterSpacing ? { letterSpacing } : {}),
+        ...(indentPt ? { indentPt } : {})
       };
     })
     .filter(Boolean);
@@ -478,6 +567,19 @@ function loadTypeSettings(fallback = DEFAULT_TYPE_SETTINGS) {
 
 function saveTypeSettings(settings) {
   localStorage.setItem(TYPE_SETTINGS_KEY, JSON.stringify(normalizeTypeSettings(settings)));
+}
+
+function loadParagraphStylePresets() {
+  try {
+    const value = JSON.parse(localStorage.getItem(PARAGRAPH_STYLE_PRESETS_KEY)) ?? {};
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveParagraphStylePresets(presets) {
+  localStorage.setItem(PARAGRAPH_STYLE_PRESETS_KEY, JSON.stringify(presets));
 }
 
 function loadLocalDraft() {
@@ -780,10 +882,11 @@ function blockMarkup(block, options = {}) {
   const fontWeight = normalizeParagraphWeight(block.fontWeight, font);
   const sizePt = normalizeBlockSizePt(block.sizePt);
   const letterSpacing = normalizeLetterSpacing(block.letterSpacing);
+  const indentPt = normalizeParagraphIndentPt(block.indentPt);
   const styles = [
     lineHeight ? `line-height: ${escapeHtml(lineHeight)}` : '',
     align ? `text-align: ${escapeHtml(align)}` : '',
-    indent ? 'text-indent: 0' : '',
+    indent ? 'text-indent: 0' : indentPt ? `text-indent: ${escapeHtml(indentPt)}pt` : '',
     fontWeight ? `font-weight: ${escapeHtml(fontWeight)}` : '',
     sizePt ? `font-size: ${escapeHtml(sizePt)}pt` : '',
     letterSpacing ? `letter-spacing: ${escapeHtml(letterSpacing)}em` : ''
@@ -796,7 +899,8 @@ function blockMarkup(block, options = {}) {
     font ? `data-font="${escapeHtml(font)}"` : '',
     fontWeight ? `data-font-weight="${escapeHtml(fontWeight)}"` : '',
     sizePt ? `data-size-pt="${escapeHtml(sizePt)}"` : '',
-    letterSpacing ? `data-letter-spacing="${escapeHtml(letterSpacing)}"` : ''
+    letterSpacing ? `data-letter-spacing="${escapeHtml(letterSpacing)}"` : '',
+    indentPt ? `data-indent-pt="${escapeHtml(indentPt)}"` : ''
   ].filter(Boolean).join(' ');
   const firstTextAttr = options.firstTextBlock ? ' data-first-text-block="true"' : '';
   return `<p${firstTextAttr}${lineAttrs ? ` ${lineAttrs}` : ''}>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
@@ -1122,7 +1226,7 @@ function readDisplayDateFromDom(article) {
 }
 
 function editorHistoryFields(root) {
-  return Array.from(root.querySelectorAll('[name="displayDate"], [name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"], [name="paragraphFont"], [name="paragraphWeight"], [name="paragraphSizePt"], [name="paragraphLetterSpacing"]'));
+  return Array.from(root.querySelectorAll('[name="displayDate"], [name="titleSizePt"], [name="bodySizePt"], [name="bodyLineHeight"], [name="indentPt"], [name="paragraphFont"], [name="paragraphWeight"], [name="paragraphSizePt"], [name="paragraphLetterSpacing"], [name="paragraphIndentPt"], [name="paragraphStylePreset"], [name="paragraphStylePresetName"]'));
 }
 
 function snapshotEditorState(root, contentRoot) {
@@ -1282,6 +1386,7 @@ function editorBlocksFromDom() {
       const fontWeight = normalizeParagraphWeight(node.dataset.fontWeight || node.style.fontWeight, font);
       const sizePt = normalizeBlockSizePt(node.dataset.sizePt || node.style.fontSize);
       const letterSpacing = normalizeLetterSpacing(node.dataset.letterSpacing || node.style.letterSpacing);
+      const indentPt = normalizeParagraphIndentPt(node.dataset.indentPt || node.style.textIndent);
       return text || html
         ? {
             type: 'text',
@@ -1293,7 +1398,8 @@ function editorBlocksFromDom() {
             ...(font ? { font } : {}),
             ...(fontWeight ? { fontWeight } : {}),
             ...(sizePt ? { sizePt } : {}),
-            ...(letterSpacing ? { letterSpacing } : {})
+            ...(letterSpacing ? { letterSpacing } : {}),
+            ...(indentPt ? { indentPt } : {})
           }
         : null;
     })
@@ -1956,13 +2062,9 @@ function removeIndentFromSelectedBlocks(contentRoot, statusRoot) {
 }
 
 function applySelectedBlockStyle(contentRoot, root, statusRoot) {
-  const font = normalizeParagraphFont(root.querySelector('[name="paragraphFont"]')?.value);
-  const fontWeight = normalizeParagraphWeight(root.querySelector('[name="paragraphWeight"]')?.value, font);
-  const sizePt = normalizeBlockSizePt(root.querySelector('[name="paragraphSizePt"]')?.value);
-  const letterSpacing = normalizeLetterSpacing(root.querySelector('[name="paragraphLetterSpacing"]')?.value);
+  const { font, fontWeight, sizePt, letterSpacing, indentPt } = readParagraphStyleControls(root);
   const selectedCaptionFigure = selectedImageFigure(root);
   const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
-  const isWholeContentSelection = selectionCoversContentRoot(contentRoot, range);
 
   if (selectedCaptionFigure && !selectionCoversContentRoot(contentRoot, range) && contentRoot.contains(selectedCaptionFigure)) {
     applyImageCaptionTypography(selectedCaptionFigure, { font, fontWeight, letterSpacing });
@@ -1994,6 +2096,12 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
       paragraph.dataset.letterSpacing = letterSpacing;
       paragraph.style.letterSpacing = `${letterSpacing}em`;
     }
+
+    if (indentPt) {
+      paragraph.dataset.indentPt = indentPt;
+      paragraph.removeAttribute('data-indent');
+      paragraph.style.textIndent = `${indentPt}pt`;
+    }
   });
   selectedImageFiguresForStyle(contentRoot, root).forEach((figure) => {
     applyImageCaptionTypography(figure, { font, fontWeight, letterSpacing });
@@ -2016,9 +2124,12 @@ function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
     paragraph.removeAttribute('data-font-weight');
     paragraph.removeAttribute('data-size-pt');
     paragraph.removeAttribute('data-letter-spacing');
+    paragraph.removeAttribute('data-indent-pt');
+    paragraph.removeAttribute('data-indent');
     paragraph.style.fontWeight = '';
     paragraph.style.fontSize = '';
     paragraph.style.letterSpacing = '';
+    paragraph.style.textIndent = '';
   });
   selectedImageFiguresForStyle(contentRoot, root).forEach((figure) => {
     applyImageCaptionTypography(figure, { font: '', fontWeight: '', letterSpacing: '' });
@@ -2027,10 +2138,12 @@ function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
   const weightField = root.querySelector('[name="paragraphWeight"]');
   const sizeField = root.querySelector('[name="paragraphSizePt"]');
   const letterField = root.querySelector('[name="paragraphLetterSpacing"]');
+  const indentField = root.querySelector('[name="paragraphIndentPt"]');
   if (fontField) fontField.value = '';
   if (weightField) syncParagraphWeightOptions(root);
   if (sizeField) sizeField.value = '';
   if (letterField) letterField.value = '';
+  if (indentField) indentField.value = '';
   statusRoot.textContent = 'selected paragraph style cleared. save to publish.';
 }
 
@@ -2040,6 +2153,10 @@ function attachEditorFormatting(root, contentRoot, statusRoot, session, article,
   root.querySelector('[name="paragraphFont"]')?.addEventListener('change', () => {
     syncParagraphWeightOptions(root);
     history.commit();
+  });
+  root.querySelector('[name="paragraphStylePreset"]')?.addEventListener('change', (event) => {
+    const nameField = root.querySelector('[name="paragraphStylePresetName"]');
+    if (nameField) nameField.value = event.currentTarget.value;
   });
   root.querySelector('[data-panel="side"]')?.addEventListener('mousedown', () => {
     rememberEditorSelection(contentRoot);
@@ -2122,6 +2239,19 @@ function attachEditorFormatting(root, contentRoot, statusRoot, session, article,
   root.querySelector('[data-action="paragraph-style-clear"]')?.addEventListener('click', () => {
     clearSelectedBlockStyle(contentRoot, root, statusRoot);
     history.commit();
+  });
+
+  root.querySelector('[data-action="paragraph-style-save"]')?.addEventListener('click', () => {
+    saveParagraphStylePreset(root, statusRoot);
+  });
+
+  root.querySelector('[data-action="paragraph-style-load"]')?.addEventListener('click', () => {
+    applyParagraphStylePreset(root, statusRoot);
+    history.commit();
+  });
+
+  root.querySelector('[data-action="paragraph-style-delete-preset"]')?.addEventListener('click', () => {
+    deleteParagraphStylePreset(root, statusRoot);
   });
 }
 
@@ -2651,6 +2781,25 @@ async function renderEditor(options = {}) {
             letter
             <span><input name="paragraphLetterSpacing" type="number" min="-0.2" max="1" step="0.01" placeholder="em"> em</span>
           </label>
+          <label>
+            indent
+            <span><input name="paragraphIndentPt" type="number" min="0" max="240" step="1" placeholder="pt"> pt</span>
+          </label>
+          <label>
+            style
+            <select name="paragraphStylePreset">
+              ${paragraphStylePresetOptionsMarkup()}
+            </select>
+          </label>
+          <label>
+            name
+            <input name="paragraphStylePresetName" type="text" maxlength="40" placeholder="style name">
+          </label>
+          <div class="editor__style-actions">
+            <button class="text-tool" type="button" data-action="paragraph-style-save">save style</button>
+            <button class="text-tool" type="button" data-action="paragraph-style-load">load</button>
+            <button class="text-tool" type="button" data-action="paragraph-style-delete-preset">delete style</button>
+          </div>
           <div class="editor__style-actions">
             <button class="text-tool" type="button" data-action="paragraph-style">apply</button>
             <button class="text-tool" type="button" data-action="paragraph-style-clear">delete</button>

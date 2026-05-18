@@ -287,6 +287,10 @@ input {
   text-indent: 0;
 }
 
+.article__body p[data-indent-pt] {
+  text-indent: inherit;
+}
+
 .article__body p[data-letter-spacing] {
   letter-spacing: inherit;
 }
