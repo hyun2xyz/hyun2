@@ -849,8 +849,10 @@ function attachNoteDots(root) {
     document.body.append(popover);
     popover.style.setProperty('--note-image-width', `${NOTE_IMAGE_WIDTH}px`);
     const rect = dot.getBoundingClientRect();
-    popover.style.left = `${Math.min(window.innerWidth - popover.offsetWidth - 12, Math.max(12, rect.left))}px`;
-    popover.style.top = `${Math.max(12, rect.bottom + 8)}px`;
+    const left = window.scrollX + Math.min(window.innerWidth - popover.offsetWidth - 12, Math.max(12, rect.left));
+    const top = window.scrollY + Math.max(12, rect.bottom + 8);
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
   };
 
   root.addEventListener('dblclick', (event) => {

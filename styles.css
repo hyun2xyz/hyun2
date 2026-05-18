@@ -551,7 +551,7 @@ input {
 }
 
 .note-popover {
-  position: fixed;
+  position: absolute;
   z-index: 20;
   max-width: min(280px, 72vw);
   padding: 6px;

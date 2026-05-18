@@ -376,8 +376,12 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(css, /\.note-dot\.is-open::after[\s\S]*font-size:\s*11px/);
   assert.match(app, /if \(!image\) return/);
   assert.match(app, /<img src="\$\{escapeHtml\(image\)\}" alt="">[\s\S]*\$\{dot\.dataset\.note/);
+  assert.match(app, /window\.scrollX/);
+  assert.match(app, /window\.scrollY/);
   assert.match(css, /--note-image-width/);
   assert.match(css, /\.note-dot\[data-image\]\.is-open::after[\s\S]*display:\s*none/);
+  assert.match(css, /\.note-popover\s*\{[^}]*position:\s*absolute/);
+  assert.doesNotMatch(css, /\.note-popover\s*\{[^}]*position:\s*fixed/);
   assert.doesNotMatch(css, /\.note-popover::before/);
   assert.doesNotMatch(css, /\.note-popover__close/);
   assert.doesNotMatch(css, /border-radius:\s*10px/);
