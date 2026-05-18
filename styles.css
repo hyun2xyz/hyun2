@@ -524,7 +524,6 @@ input {
 
 .note-dot.is-open::after {
   position: absolute;
-  display: none;
   left: 50%;
   bottom: 140%;
   z-index: 4;
@@ -547,53 +546,29 @@ input {
   transform: translateX(-50%);
 }
 
+.note-dot[data-image].is-open::after {
+  display: none;
+}
+
 .note-popover {
   position: fixed;
   z-index: 20;
-  max-width: min(520px, 78vw);
-  padding: 16px 18px 14px 24px;
-  color: #fff;
+  max-width: min(280px, 72vw);
+  padding: 6px;
+  color: var(--bg);
   font-family:
-    "Apple SD Gothic Neo",
-    "Noto Sans KR",
-    Arial,
-    sans-serif;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.45;
-  text-align: center;
-  background: rgba(24, 24, 24, 0.9);
-  border: 0;
-  border-radius: 10px;
-}
-
-.note-popover::before {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 10px;
-  height: 10px;
-  content: "";
-  background: #1d5e1e;
-  border-radius: 50%;
-}
-
-.note-popover__close {
-  position: absolute;
-  top: 10px;
-  left: 22px;
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  color: #fff;
-  font-size: 16px;
-  line-height: 1;
-  background: transparent;
-  border: 0;
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  font-size: 11px;
+  line-height: 1.25;
+  background: var(--fg);
+  border: 1px solid var(--fg);
 }
 
 .note-popover p {
-  margin: 0;
+  margin: 6px 0 0;
 }
 
 .note-popover img {
@@ -601,7 +576,6 @@ input {
   width: var(--note-image-width, 180px);
   max-width: 100%;
   height: 100%;
-  margin: 0 auto 8px;
   object-fit: contain;
 }
 

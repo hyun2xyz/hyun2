@@ -838,22 +838,15 @@ function attachNoteDots(root) {
   const openPopover = (dot) => {
     closePopover();
     const image = sanitizeImageUrl(dot.dataset.image);
-    const note = String(dot.dataset.note ?? '').trim();
-    if (!image && !note) return;
+    if (!image) return;
 
     const popover = document.createElement('div');
     popover.className = 'note-popover';
     popover.innerHTML = `
-      <button class="note-popover__close" type="button" aria-label="닫기">×</button>
-      ${image ? `<img src="${escapeHtml(image)}" alt="">` : ''}
+      <img src="${escapeHtml(image)}" alt="">
       ${dot.dataset.note ? `<p>${escapeHtml(dot.dataset.note)}</p>` : ''}
     `;
     document.body.append(popover);
-    popover.querySelector('.note-popover__close')?.addEventListener('click', (event) => {
-      event.stopPropagation();
-      dot.classList.remove('is-open');
-      closePopover();
-    });
     popover.style.setProperty('--note-image-width', `${NOTE_IMAGE_WIDTH}px`);
     const rect = dot.getBoundingClientRect();
     popover.style.left = `${Math.min(window.innerWidth - popover.offsetWidth - 12, Math.max(12, rect.left))}px`;
