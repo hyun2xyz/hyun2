@@ -15,6 +15,7 @@ const LOCAL_DRAFT_KEY = 'hyun2.localDraft';
 const SESSION_KEY = 'hyun2.supabaseSession';
 const THEME_KEY = 'hyun2.theme';
 const LANG_KEY = 'hyun2.lang';
+const EDIT_LANG_KEY = 'hyun2.editorLang';
 const TYPE_SETTINGS_KEY = 'hyun2.typeSettings';
 const PARAGRAPH_STYLE_PRESETS_KEY = 'hyun2.paragraphStylePresets';
 const HYUN2_IMAGE_MOVE_TYPE = 'application/x-hyun2-image-move';
@@ -440,6 +441,26 @@ function normalizeTypeSettings(settings = {}) {
   };
 }
 
+function localizedValue(primary, secondary, lang = currentLang()) {
+  const preferred = lang === 'en' ? secondary : primary;
+  const fallback = lang === 'en' ? primary : secondary;
+  return String(preferred ?? '').trim() ? preferred : fallback;
+}
+
+function localizedArticleTitle(article, lang = currentLang()) {
+  return String(localizedValue(article.titleKo ?? article.title, article.titleEn, lang) ?? article.title ?? fallbackArticle.title);
+}
+
+function localizedBlockHtml(block, lang = currentLang()) {
+  const htmlKo = block.htmlKo ?? block.html ?? (block.text ? escapeHtml(block.text) : '');
+  const htmlEn = block.htmlEn ?? (block.textEn ? escapeHtml(block.textEn) : '');
+  return String(localizedValue(htmlKo, htmlEn, lang) ?? '');
+}
+
+function localizedImageCaption(block, lang = currentLang()) {
+  return String(localizedValue(block.captionKo ?? block.caption, block.captionEn, lang) ?? '');
+}
+
 function blocksFromText(body) {
   return splitParagraphs(body).map((text) => ({ type: 'text', text }));
 }
@@ -458,11 +479,15 @@ function normalizeBlocks(blocks, fallbackBody = '') {
         const captionFont = normalizeParagraphFont(block.captionFont);
         const captionFontWeight = normalizeParagraphWeight(block.captionFontWeight, captionFont);
         const captionLetterSpacing = normalizeLetterSpacing(block.captionLetterSpacing);
+        const captionKo = String(block.captionKo ?? block.caption ?? '');
+        const captionEn = String(block.captionEn ?? '');
         return {
           type: 'image',
           src: String(block.src),
           alt: String(block.alt ?? ''),
-          caption: String(block.caption ?? ''),
+          caption: captionKo,
+          captionKo,
+          ...(captionEn ? { captionEn } : {}),
           ...(captionFont ? { captionFont } : {}),
           ...(captionFontWeight ? { captionFontWeight } : {}),
           ...(captionLetterSpacing ? { captionLetterSpacing } : {}),
@@ -478,8 +503,10 @@ function normalizeBlocks(blocks, fallbackBody = '') {
         };
       }
 
-      const html = block?.html ? sanitizeInlineHtml(block.html) : '';
-      const text = String(block?.text ?? (html ? textFromHtml(html) : '')).trim();
+      const html = block?.htmlKo || block?.html ? sanitizeInlineHtml(block.htmlKo ?? block.html) : '';
+      const htmlEn = block?.htmlEn ? sanitizeInlineHtml(block.htmlEn) : '';
+      const text = String(block?.textKo ?? block?.text ?? (html ? textFromHtml(html) : '')).trim();
+      const textEn = String(block?.textEn ?? (htmlEn ? textFromHtml(htmlEn) : '')).trim();
       const lineHeight = normalizeBlockLineHeight(block?.lineHeight);
       const align = normalizeTextAlign(block?.align);
       const indent = normalizeBlockIndent(block?.indent);
@@ -488,12 +515,16 @@ function normalizeBlocks(blocks, fallbackBody = '') {
       const sizePt = normalizeBlockSizePt(block?.sizePt);
       const letterSpacing = normalizeLetterSpacing(block?.letterSpacing);
       const indentPt = normalizeParagraphIndentPt(block?.indentPt);
-      if (!text && !html.replace(/<br\s*\/?>/gi, '').trim()) return null;
+      if (!text && !textEn && !html.replace(/<br\s*\/?>/gi, '').trim() && !htmlEn.replace(/<br\s*\/?>/gi, '').trim()) return null;
 
       return {
         type: 'text',
         text,
+        ...(text ? { textKo: text } : {}),
+        ...(textEn ? { textEn } : {}),
         ...(html ? { html } : {}),
+        ...(html ? { htmlKo: html } : {}),
+        ...(htmlEn ? { htmlEn } : {}),
         ...(lineHeight ? { lineHeight } : {}),
         ...(align ? { align } : {}),
         ...(indent ? { indent } : {}),
@@ -526,6 +557,8 @@ function decodeContent(content) {
         body: parsed.body,
         blocks,
         style: normalizeTypeSettings(parsed.style),
+        titleKo: parsed.title?.ko ?? parsed.titleKo ?? '',
+        titleEn: parsed.title?.en ?? parsed.titleEn ?? '',
         displayDate: parsed.displayDate ?? parsed.meta?.displayDate ?? '',
         sortOrder: Number.isFinite(Number.parseFloat(parsed.sortOrder ?? parsed.meta?.sortOrder))
           ? Number.parseFloat(parsed.sortOrder ?? parsed.meta?.sortOrder)
@@ -540,6 +573,8 @@ function decodeContent(content) {
     body: raw,
     blocks: blocksFromText(raw),
     style: normalizeTypeSettings(),
+    titleKo: '',
+    titleEn: '',
     displayDate: '',
     sortOrder: null
   };
@@ -552,6 +587,10 @@ function encodeContent(body, style, blocks = null, meta = {}) {
     body: String(body ?? ''),
     blocks: normalizedBlocks,
     style: normalizeTypeSettings(style),
+    title: {
+      ko: String(meta.titleKo ?? ''),
+      en: String(meta.titleEn ?? '')
+    },
     displayDate: dateInputValue(meta.displayDate),
     sortOrder: Number.isFinite(Number.parseFloat(meta.sortOrder)) ? Number.parseFloat(meta.sortOrder) : null
   }, null, 2);
@@ -634,11 +673,27 @@ function currentLang() {
   }
 }
 
+function currentEditorLang() {
+  try {
+    return localStorage.getItem(EDIT_LANG_KEY) === 'en' ? 'en' : 'ko';
+  } catch {
+    return 'ko';
+  }
+}
+
+function setEditorLang(lang) {
+  const next = lang === 'en' ? 'en' : 'ko';
+  localStorage.setItem(EDIT_LANG_KEY, next);
+  return next;
+}
+
 function setLang(lang) {
   const next = lang === 'en' ? 'en' : 'ko';
   document.documentElement.dataset.lang = next;
   localStorage.setItem(LANG_KEY, next);
   updateTopControls();
+  if (isIndexPage) renderIndexPage(window.hyun2Posts ?? []);
+  if (!isAdminPage && !isIndexPage) renderReader(currentArticle(), window.hyun2Posts ?? []);
 }
 
 function toggleLang() {
@@ -765,9 +820,14 @@ function normalizeArticle(article = fallbackArticle) {
   const style = normalizeTypeSettings(merged.style ?? decoded.style ?? loadTypeSettings());
   const blocks = normalizeBlocks(merged.blocks ?? decoded.blocks, decoded.body);
   const sortOrder = Number.parseFloat(merged.sort_order ?? merged.sortOrder ?? decoded.sortOrder);
+  const titleKo = String(merged.titleKo ?? decoded.titleKo ?? merged.title ?? fallbackArticle.title);
+  const titleEn = String(merged.titleEn ?? decoded.titleEn ?? '');
 
   return {
     ...merged,
+    title: titleKo,
+    titleKo,
+    titleEn,
     content: decoded.body,
     blocks,
     style,
@@ -812,6 +872,7 @@ function formatDate(value) {
 }
 
 function imageBlockMarkup(block, options = {}) {
+  const lang = options.lang ?? currentLang();
   const width = Number.isFinite(Number.parseFloat(block.width)) ? Number.parseFloat(block.width) : 100;
   const align = ['left', 'right', 'center'].includes(block.align) ? block.align : 'center';
   const wrap = Boolean(block.wrap);
@@ -821,7 +882,7 @@ function imageBlockMarkup(block, options = {}) {
   const marginRight = normalizeImageMarginPt(block.marginRight, defaults.right);
   const marginBottom = normalizeImageMarginPt(block.marginBottom, defaults.bottom);
   const marginLeft = normalizeImageMarginPt(block.marginLeft, defaults.left);
-  const caption = String(block.caption ?? '');
+  const caption = localizedImageCaption(block, lang);
   const hasCaption = caption.trim().length > 0;
   const captionFont = normalizeParagraphFont(block.captionFont);
   const captionFontWeight = normalizeParagraphWeight(block.captionFontWeight, captionFont);
@@ -858,6 +919,8 @@ function imageBlockMarkup(block, options = {}) {
       data-align="${escapeHtml(align)}"
       data-wrap="${wrap ? 'true' : 'false'}"
       data-caption="${escapeHtml(caption)}"
+      data-caption-ko="${escapeHtml(block.captionKo ?? block.caption ?? '')}"
+      data-caption-en="${escapeHtml(block.captionEn ?? '')}"
       ${captionFont ? `data-caption-font="${escapeHtml(captionFont)}"` : ''}
       ${captionFontWeight ? `data-caption-font-weight="${escapeHtml(captionFontWeight)}"` : ''}
       ${captionLetterSpacing ? `data-caption-letter-spacing="${escapeHtml(captionLetterSpacing)}"` : ''}
@@ -875,6 +938,7 @@ function imageBlockMarkup(block, options = {}) {
 
 function blockMarkup(block, options = {}) {
   if (block.type === 'image') return imageBlockMarkup(block, options);
+  const lang = options.lang ?? currentLang();
   const lineHeight = normalizeBlockLineHeight(block.lineHeight);
   const align = normalizeTextAlign(block.align);
   const indent = normalizeBlockIndent(block.indent);
@@ -903,7 +967,8 @@ function blockMarkup(block, options = {}) {
     indentPt ? `data-indent-pt="${escapeHtml(indentPt)}"` : ''
   ].filter(Boolean).join(' ');
   const firstTextAttr = options.firstTextBlock ? ' data-first-text-block="true"' : '';
-  return `<p${firstTextAttr}${lineAttrs ? ` ${lineAttrs}` : ''}>${block.html ? sanitizeInlineHtml(block.html) : escapeHtml(block.text)}</p>`;
+  const html = localizedBlockHtml(block, lang);
+  return `<p${firstTextAttr}${lineAttrs ? ` ${lineAttrs}` : ''}>${html ? sanitizeInlineHtml(html) : escapeHtml(localizedValue(block.textKo ?? block.text, block.textEn, lang))}</p>`;
 }
 
 function articleBlocksMarkup(blocks, options = {}) {
@@ -944,14 +1009,15 @@ function attachFirstTextBlockGuard(contentRoot) {
 
 function articleMarkup(article, options = {}) {
   const view = normalizeArticle(article);
+  const lang = options.lang ?? currentLang();
   const date = formatDate(view.display_date ?? view.published_at ?? view.updated_at);
   const blocks = view.blocks.length ? view.blocks : blocksFromText(view.content);
 
   return `
-    <h1 class="article__title">${escapeHtml(view.title)}</h1>
+    <h1 class="article__title">${escapeHtml(localizedArticleTitle(view, lang))}</h1>
     ${date ? `<time class="article__date" datetime="${escapeHtml(view.display_date ?? view.published_at ?? view.updated_at)}">${escapeHtml(date)}</time>` : ''}
     <div class="article__body">
-      ${articleBlocksMarkup(blocks, options)}
+      ${articleBlocksMarkup(blocks, { ...options, lang })}
       ${options.editable && !blocks.length ? '<p><br></p>' : ''}
     </div>
   `;
@@ -967,6 +1033,7 @@ export function renderArticle(article) {
 
 function renderReaderIndex(posts, selectedSlug) {
   if (!posts.length) return '';
+  const lang = currentLang();
 
   return `
     <aside class="reader-index reader-chrome" data-panel="index" aria-label="글 목차">
@@ -976,7 +1043,7 @@ function renderReaderIndex(posts, selectedSlug) {
       <nav>
         ${posts.map((post) => `
           <a class="${post.slug === selectedSlug ? 'is-selected' : ''}" href="./?post=${encodeURIComponent(post.slug)}">
-            ${escapeHtml(post.title)}
+            ${escapeHtml(localizedArticleTitle(post, lang))}
           </a>
         `).join('')}
       </nav>
@@ -1095,6 +1162,8 @@ function attachReaderChromeDissolve(root) {
 
 function renderIndexPage(posts = []) {
   const root = document.querySelector('#article-root');
+  const lang = currentLang();
+  window.hyun2Posts = posts;
 
   root.innerHTML = `
     <section class="index-page" aria-label="전체 목차">
@@ -1102,7 +1171,7 @@ function renderIndexPage(posts = []) {
         <nav class="index-page__list">
           ${posts.map((post) => `
             <a class="index-page__row" href="./?post=${encodeURIComponent(post.slug)}">
-              <span>${escapeHtml(post.title)}</span>
+              <span>${escapeHtml(localizedArticleTitle(post, lang))}</span>
               <time>${escapeHtml(formatDate(post.display_date ?? post.published_at ?? post.updated_at))}</time>
             </a>
           `).join('')}
@@ -1134,6 +1203,8 @@ function enrichPostSummary(post, index = 0) {
   const sortOrder = Number.parseFloat(post.sort_order ?? decoded.sortOrder);
   return {
     ...post,
+    titleKo: decoded.titleKo || post.title,
+    titleEn: decoded.titleEn || post.titleEn || '',
     display_date: dateInputValue(decoded.displayDate ?? post.published_at ?? post.updated_at),
     sort_order: Number.isFinite(sortOrder) ? sortOrder : index
   };
@@ -1152,6 +1223,7 @@ function sortPostSummaries(posts) {
 function renderReader(article, posts = []) {
   const root = document.querySelector('#article-root');
   const view = normalizeArticle(article);
+  window.hyun2Posts = posts;
   applyTypeStyle(root, view.style);
 
   root.innerHTML = `
@@ -1337,15 +1409,25 @@ function attachEditorSaveShortcut(saveHandler) {
   }, { signal: editorSaveShortcutController.signal });
 }
 
-function editorBlocksFromDom() {
+function editorBlocksFromDom(article = currentArticle(), lang = currentEditorLang()) {
   const contentRoot = document.querySelector('[data-field="content"]');
   if (!contentRoot) return [];
+  const existingBlocks = normalizeArticle(article).blocks;
+  let blockIndex = 0;
 
   return Array.from(contentRoot.childNodes)
     .map((node) => {
+      let block = null;
+
       if (node.nodeType === Node.TEXT_NODE) {
         const text = node.textContent.trim();
-        return text ? { type: 'text', text } : null;
+        if (!text) return null;
+        const existing = existingBlocks[blockIndex] ?? {};
+        block = lang === 'en'
+          ? { type: 'text', text: existing.text ?? '', textEn: text }
+          : { type: 'text', text, textKo: text, textEn: existing.textEn ?? '' };
+        blockIndex += 1;
+        return block;
       }
 
       if (!(node instanceof HTMLElement)) return null;
@@ -1355,12 +1437,21 @@ function editorBlocksFromDom() {
         const captionFont = normalizeParagraphFont(node.dataset.captionFont);
         const captionFontWeight = normalizeParagraphWeight(node.dataset.captionFontWeight, captionFont);
         const captionLetterSpacing = normalizeLetterSpacing(node.dataset.captionLetterSpacing);
-        return image?.src
+        const existing = existingBlocks[blockIndex] ?? {};
+        block = image?.src
           ? {
               type: 'image',
               src: image.src,
               alt: image.alt,
-              caption: node.dataset.caption ?? '',
+              caption: lang === 'en'
+                ? String(node.dataset.captionKo ?? existing.captionKo ?? existing.caption ?? '')
+                : String(node.dataset.caption ?? ''),
+              captionKo: lang === 'en'
+                ? String(node.dataset.captionKo ?? existing.captionKo ?? existing.caption ?? '')
+                : String(node.dataset.caption ?? ''),
+              ...(lang === 'en'
+                ? { captionEn: node.dataset.caption ?? '' }
+                : (node.dataset.captionEn || existing.captionEn ? { captionEn: node.dataset.captionEn ?? existing.captionEn ?? '' } : {})),
               ...(captionFont ? { captionFont } : {}),
               ...(captionFontWeight ? { captionFontWeight } : {}),
               ...(captionLetterSpacing ? { captionLetterSpacing } : {}),
@@ -1375,10 +1466,13 @@ function editorBlocksFromDom() {
               wrap: node.dataset.wrap === 'true'
             }
           : null;
+        if (block) blockIndex += 1;
+        return block;
       }
 
       const text = node.innerText.trim();
       const html = sanitizeInlineHtml(node.innerHTML).trim();
+      const existing = existingBlocks[blockIndex] ?? {};
       const lineHeight = normalizeBlockLineHeight(node.dataset.lineHeight || node.style.lineHeight);
       const align = normalizeTextAlign(node.dataset.align || node.style.textAlign);
       const indent = normalizeBlockIndent(node.dataset.indent);
@@ -1387,11 +1481,15 @@ function editorBlocksFromDom() {
       const sizePt = normalizeBlockSizePt(node.dataset.sizePt || node.style.fontSize);
       const letterSpacing = normalizeLetterSpacing(node.dataset.letterSpacing || node.style.letterSpacing);
       const indentPt = normalizeParagraphIndentPt(node.dataset.indentPt || node.style.textIndent);
-      return text || html
+      block = text || html
         ? {
             type: 'text',
-            text,
-            ...(html ? { html } : {}),
+            text: lang === 'en' ? (existing.text ?? existing.textKo ?? '') : text,
+            ...(lang === 'en' && text ? { textEn: text } : {}),
+            ...(lang === 'ko' ? { textKo: text } : (existing.textKo || existing.text ? { textKo: existing.textKo ?? existing.text } : {})),
+            ...(html ? (lang === 'en' ? {} : { html }) : {}),
+            ...(lang === 'ko' && html ? { htmlKo: html } : (existing.htmlKo || existing.html ? { htmlKo: existing.htmlKo ?? existing.html } : {})),
+            ...(lang === 'en' && html ? { htmlEn: html } : (existing.htmlEn ? { htmlEn: existing.htmlEn } : {})),
             ...(lineHeight ? { lineHeight } : {}),
             ...(align ? { align } : {}),
             ...(indent ? { indent } : {}),
@@ -1402,6 +1500,8 @@ function editorBlocksFromDom() {
             ...(indentPt ? { indentPt } : {})
           }
         : null;
+      if (block) blockIndex += 1;
+      return block;
     })
     .filter(Boolean);
 }
@@ -1411,8 +1511,9 @@ function publishEnabled() {
 }
 
 function editorArticleFromDom(article, session = null) {
+  const editLang = currentEditorLang();
   const title = document.querySelector('[data-field="title"]').innerText.trim();
-  const blocks = editorBlocksFromDom();
+  const blocks = editorBlocksFromDom(article, editLang);
   const content = textFromBlocks(blocks).trim();
   const style = readTypeSettingsFromDom(article);
   const displayDate = readDisplayDateFromDom(article);
@@ -1420,11 +1521,19 @@ function editorArticleFromDom(article, session = null) {
   const body = content || (blocks.some((block) => block.type === 'image') ? '' : fallbackArticle.content);
   const status = publishEnabled() ? 'published' : 'draft';
   const publishedAt = status === 'published' ? dateInputToIso(displayDate) ?? new Date().toISOString() : null;
+  const titleKo = editLang === 'en'
+    ? String(article.titleKo ?? article.title ?? '')
+    : title || '제목 없는 글';
+  const titleEn = editLang === 'en'
+    ? title
+    : String(article.titleEn ?? '');
 
   return normalizeArticle({
     ...article,
-    title: title || '제목 없는 글',
-    slug: article.id ? article.slug : article.slug || slugify(title),
+    title: titleKo || '제목 없는 글',
+    titleKo: titleKo || '제목 없는 글',
+    titleEn,
+    slug: article.id ? article.slug : article.slug || slugify(titleKo || title),
     author_id: article.author_id ?? session?.user?.id,
     excerpt: textBlocks[0]?.text.slice(0, 90) ?? 'Hyun2',
     content: body,
@@ -1442,6 +1551,8 @@ function articleForSupabase(article) {
   return {
     ...next,
     content: encodeContent(next.content, next.style, next.blocks, {
+      titleKo: next.titleKo ?? next.title,
+      titleEn: next.titleEn,
       displayDate: next.display_date,
       sortOrder: next.sort_order
     })
@@ -2536,6 +2647,8 @@ function renderAdminIndex(posts, selectedSlug) {
 function contentWithMeta(post, metaPatch = {}) {
   const decoded = decodeContent(post.content);
   return encodeContent(decoded.body, decoded.style, decoded.blocks, {
+    titleKo: decoded.titleKo ?? post.title,
+    titleEn: decoded.titleEn,
     displayDate: metaPatch.displayDate ?? decoded.displayDate ?? post.display_date,
     sortOrder: metaPatch.sortOrder ?? decoded.sortOrder ?? post.sort_order
   });
@@ -2676,6 +2789,7 @@ async function renderEditor(options = {}) {
   }
 
   const style = normalizeTypeSettings(article.style);
+  const editLang = currentEditorLang();
   setCurrentArticle(article);
 
   const root = document.querySelector('#article-root');
@@ -2697,13 +2811,15 @@ async function renderEditor(options = {}) {
           <button type="button" data-action="save">save</button>
           <button type="button" data-action="publish" aria-pressed="${article.status === 'published'}">${article.status === 'published' ? 'status: published' : 'status: draft'}</button>
           <button type="button" data-action="theme-toggle" aria-label="${currentTheme() === 'dark' ? 'dark' : 'light'}">${themeLabel(currentTheme())}</button>
+          <button type="button" data-action="editor-lang" data-lang="ko" aria-pressed="${editLang === 'ko'}">ko</button>
+          <button type="button" data-action="editor-lang" data-lang="en" aria-pressed="${editLang === 'en'}">en</button>
           <a class="button-link" href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
           <button type="button" data-action="trash">trash</button>
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
         </div>
 
-        <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(article.title)}</h1>
-        <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${articleBlocksMarkup(normalizeArticle(article).blocks, { editable: true }) || '<p><br></p>'}</div>
+        <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(localizedArticleTitle(article, editLang))}</h1>
+        <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${articleBlocksMarkup(normalizeArticle(article).blocks, { editable: true, lang: editLang }) || '<p><br></p>'}</div>
         <p class="editor__status">${escapeHtml(options.statusText ?? '')}</p>
       </section>
 
@@ -2881,6 +2997,16 @@ async function renderEditor(options = {}) {
   root.querySelector('[name="displayDate"]')?.addEventListener('input', () => {
     setCurrentArticle({ ...currentArticle(), display_date: readDisplayDateFromDom(currentArticle()) });
     history.commit();
+  });
+
+  root.querySelectorAll('[data-action="editor-lang"]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const nextArticle = editorArticleFromDom(article, session);
+      setCurrentArticle(nextArticle);
+      saveLocalDraft(nextArticle);
+      const nextLang = setEditorLang(button.dataset.lang);
+      await renderEditor({ article: nextArticle, statusText: `editing ${nextLang}` });
+    });
   });
 
   root.querySelectorAll('[data-action="select-post"]').forEach((button) => {
