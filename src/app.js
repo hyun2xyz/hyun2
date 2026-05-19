@@ -74,6 +74,7 @@ const isAdminPage = document.body.dataset.admin === 'true'
 const isIndexPage = routeParams.has('index')
   || routeParams.get('view') === 'index';
 let lastEditorRange = null;
+let lastEditorBlockRange = null;
 let editorSaveShortcutController = null;
 
 function splitParagraphs(content) {
@@ -186,18 +187,30 @@ function syncParagraphStylePresetOptions(root, selected = root.querySelector('[n
 }
 
 function readParagraphStyleControls(root) {
-  const font = normalizeParagraphFont(root.querySelector('[name="paragraphFont"]')?.value);
+  return paragraphStyleControlsWithDefaults({
+    font: root.querySelector('[name="paragraphFont"]')?.value,
+    fontWeight: root.querySelector('[name="paragraphWeight"]')?.value,
+    sizePt: root.querySelector('[name="paragraphSizePt"]')?.value,
+    letterSpacing: root.querySelector('[name="paragraphLetterSpacing"]')?.value,
+    indentPt: root.querySelector('[name="paragraphIndentPt"]')?.value
+  });
+}
+
+function paragraphStyleControlsWithDefaults(style = {}, fallback = defaultParagraphStyleControls()) {
+  const font = normalizeParagraphFont(style.font ?? fallback.font);
   return {
     font,
-    fontWeight: normalizeParagraphWeight(root.querySelector('[name="paragraphWeight"]')?.value, font),
-    sizePt: normalizeBlockSizePt(root.querySelector('[name="paragraphSizePt"]')?.value),
-    letterSpacing: normalizeLetterSpacing(root.querySelector('[name="paragraphLetterSpacing"]')?.value),
-    indentPt: normalizeParagraphIndentPt(root.querySelector('[name="paragraphIndentPt"]')?.value)
+    fontWeight: normalizeParagraphWeight(style.fontWeight, font)
+      || normalizeParagraphWeight(fallback.fontWeight, font),
+    sizePt: normalizeBlockSizePt(style.sizePt) ?? normalizeBlockSizePt(fallback.sizePt) ?? '12',
+    letterSpacing: normalizeLetterSpacing(style.letterSpacing) ?? normalizeLetterSpacing(fallback.letterSpacing) ?? '0',
+    indentPt: normalizeParagraphIndentPt(style.indentPt) ?? normalizeParagraphIndentPt(fallback.indentPt) ?? '0'
   };
 }
 
 function writeParagraphStyleControls(root, style = {}) {
-  const font = normalizeParagraphFont(style.font);
+  const nextStyle = paragraphStyleControlsWithDefaults(style);
+  const font = nextStyle.font;
   const fontField = root.querySelector('[name="paragraphFont"]');
   const sizeField = root.querySelector('[name="paragraphSizePt"]');
   const letterField = root.querySelector('[name="paragraphLetterSpacing"]');
@@ -207,10 +220,10 @@ function writeParagraphStyleControls(root, style = {}) {
   syncParagraphWeightOptions(root);
 
   const weightField = root.querySelector('[name="paragraphWeight"]');
-  if (weightField) weightField.value = normalizeParagraphWeight(style.fontWeight, font);
-  if (sizeField) sizeField.value = normalizeBlockSizePt(style.sizePt) ?? '';
-  if (letterField) letterField.value = normalizeLetterSpacing(style.letterSpacing) ?? '';
-  if (indentField) indentField.value = normalizeParagraphIndentPt(style.indentPt) ?? '';
+  if (weightField) weightField.value = nextStyle.fontWeight;
+  if (sizeField) sizeField.value = nextStyle.sizePt;
+  if (letterField) letterField.value = nextStyle.letterSpacing;
+  if (indentField) indentField.value = nextStyle.indentPt;
 }
 
 function defaultParagraphStyleControls(article = currentArticle()) {
@@ -1978,9 +1991,45 @@ function rangeBelongsToContent(range, contentRoot) {
   return Boolean(container && contentRoot.contains(container));
 }
 
+function rangeTouchesContent(range, contentRoot) {
+  if (!range || !contentRoot) return false;
+  if (rangeBelongsToContent(range, contentRoot)) return true;
+
+  try {
+    return range.intersectsNode(contentRoot);
+  } catch {
+    return false;
+  }
+}
+
+function selectionRangeTouchingContent(contentRoot) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+
+  const range = selection.getRangeAt(0);
+  return rangeTouchesContent(range, contentRoot) ? range : null;
+}
+
 function rememberEditorSelection(contentRoot) {
   const range = selectionRangeIn(contentRoot);
-  if (range) lastEditorRange = range.cloneRange();
+  if (range) {
+    lastEditorRange = range.cloneRange();
+    lastEditorBlockRange = range.cloneRange();
+    return range;
+  }
+
+  const blockRange = selectionRangeTouchingContent(contentRoot);
+  if (blockRange) lastEditorBlockRange = blockRange.cloneRange();
+  return blockRange;
+}
+
+function fallbackEditorBlockRange(contentRoot) {
+  if (rangeTouchesContent(lastEditorBlockRange, contentRoot)) return lastEditorBlockRange.cloneRange();
+  return fallbackEditorRange(contentRoot);
+}
+
+function selectionRangeForBlocks(contentRoot) {
+  const range = selectionRangeTouchingContent(contentRoot) ?? fallbackEditorBlockRange(contentRoot);
   return range;
 }
 
@@ -2266,7 +2315,7 @@ async function uploadHyperlinkNoteImage(contentRoot, statusRoot, session, articl
 }
 
 function selectedEditableBlocks(contentRoot) {
-  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
+  const range = selectionRangeForBlocks(contentRoot);
   const paragraphs = Array.from(contentRoot.querySelectorAll('p'));
   if (!range) return paragraphs.slice(0, 1);
   if (selectionCoversContentRoot(contentRoot, range)) return paragraphs;
@@ -2288,7 +2337,7 @@ function selectionCoversContentRoot(contentRoot, range) {
 
 function selectedImageFiguresForStyle(contentRoot, root) {
   const figures = Array.from(contentRoot.querySelectorAll('[data-block-type="image"]'));
-  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
+  const range = selectionRangeForBlocks(contentRoot);
   if (!range) return [];
   if (selectionCoversContentRoot(contentRoot, range)) return figures;
   const selectedFigure = selectedImageFigure(root);
@@ -2340,7 +2389,7 @@ function removeIndentFromSelectedBlocks(contentRoot, statusRoot) {
 function applySelectedBlockStyle(contentRoot, root, statusRoot) {
   const { font, fontWeight, sizePt, letterSpacing, indentPt } = readParagraphStyleControls(root);
   const selectedCaptionFigure = selectedImageFigure(root);
-  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
+  const range = selectionRangeForBlocks(contentRoot);
 
   if (selectedCaptionFigure && !selectionCoversContentRoot(contentRoot, range) && contentRoot.contains(selectedCaptionFigure)) {
     applyImageCaptionTypography(selectedCaptionFigure, { font, fontWeight, letterSpacing });
@@ -2387,7 +2436,7 @@ function applySelectedBlockStyle(contentRoot, root, statusRoot) {
 
 function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
   const selectedCaptionFigure = selectedImageFigure(root);
-  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
+  const range = selectionRangeForBlocks(contentRoot);
 
   if (selectedCaptionFigure && !selectionCoversContentRoot(contentRoot, range) && contentRoot.contains(selectedCaptionFigure)) {
     applyImageCaptionTypography(selectedCaptionFigure, { font: '', fontWeight: '', letterSpacing: '' });
@@ -2410,16 +2459,7 @@ function clearSelectedBlockStyle(contentRoot, root, statusRoot) {
   selectedImageFiguresForStyle(contentRoot, root).forEach((figure) => {
     applyImageCaptionTypography(figure, { font: '', fontWeight: '', letterSpacing: '' });
   });
-  const fontField = root.querySelector('[name="paragraphFont"]');
-  const weightField = root.querySelector('[name="paragraphWeight"]');
-  const sizeField = root.querySelector('[name="paragraphSizePt"]');
-  const letterField = root.querySelector('[name="paragraphLetterSpacing"]');
-  const indentField = root.querySelector('[name="paragraphIndentPt"]');
-  if (fontField) fontField.value = '';
-  if (weightField) syncParagraphWeightOptions(root);
-  if (sizeField) sizeField.value = '';
-  if (letterField) letterField.value = '';
-  if (indentField) indentField.value = '';
+  writeParagraphStyleControls(root, defaultParagraphStyleControls());
   statusRoot.textContent = 'selected paragraph style cleared. save to publish.';
 }
 

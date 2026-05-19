@@ -110,6 +110,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /saveParagraphStylePreset/);
   assert.match(app, /applyParagraphStylePreset/);
   assert.match(app, /defaultParagraphStyleControls/);
+  assert.match(app, /paragraphStyleControlsWithDefaults/);
   assert.match(app, /applyParagraphStyleControlsImmediately/);
   assert.match(app, /paragraphControlFields/);
   assert.match(app, /applyParagraphStylePreset\(root, statusRoot, \{ contentRoot, history \}\)/);
@@ -120,6 +121,11 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /syncParagraphWeightOptions/);
   assert.match(app, /normalizeParagraphWeight\(.*font/);
   assert.match(app, /selectionCoversContentRoot/);
+  assert.match(app, /let lastEditorBlockRange/);
+  assert.match(app, /rangeTouchesContent/);
+  assert.match(app, /selectionRangeTouchingContent/);
+  assert.match(app, /selectionRangeForBlocks/);
+  assert.match(app, /fallbackEditorBlockRange/);
   assert.match(app, /selectedImageFiguresForStyle/);
   assert.match(app, /applyImageCaptionTypography/);
   assert.match(app, /data-caption-font/);
@@ -129,6 +135,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /data-action="paragraph-style"/);
   assert.match(app, /data-action="paragraph-style-clear"/);
   assert.match(app, /selectedEditableBlocks/);
+  assert.match(app, /writeParagraphStyleControls\(root, defaultParagraphStyleControls\(\)\)/);
   assert.match(app, /image-resize-handle/);
   assert.match(app, /attachImageResizeDrag/);
   assert.match(app, /attachImageMove/);
