@@ -18,6 +18,7 @@ const LANG_KEY = 'hyun2.lang';
 const EDIT_LANG_KEY = 'hyun2.editorLang';
 const TYPE_SETTINGS_KEY = 'hyun2.typeSettings';
 const PARAGRAPH_STYLE_PRESETS_KEY = 'hyun2.paragraphStylePresets';
+const LLM_CONFIG_KEY = 'hyun2.llmConfig';
 const HYUN2_IMAGE_MOVE_TYPE = 'application/x-hyun2-image-move';
 const NOTE_IMAGE_WIDTH = 180;
 const DEFAULT_IMAGE_MARGIN_PT = 8;
@@ -659,6 +660,37 @@ function loadParagraphStylePresets() {
 
 function saveParagraphStylePresets(presets) {
   localStorage.setItem(PARAGRAPH_STYLE_PRESETS_KEY, JSON.stringify(presets));
+}
+
+function loadLlmConfig() {
+  try {
+    const config = JSON.parse(localStorage.getItem(LLM_CONFIG_KEY)) ?? {};
+    return {
+      baseUrl: String(config.baseUrl ?? '').trim().replace(/\/+$/, ''),
+      apiKey: String(config.apiKey ?? '').trim()
+    };
+  } catch {
+    return { baseUrl: '', apiKey: '' };
+  }
+}
+
+function saveLlmConfig(config) {
+  const next = {
+    baseUrl: String(config.baseUrl ?? '').trim().replace(/\/+$/, ''),
+    apiKey: String(config.apiKey ?? '').trim()
+  };
+  localStorage.setItem(LLM_CONFIG_KEY, JSON.stringify(next));
+  return next;
+}
+
+function promptForLlmConfig() {
+  const current = loadLlmConfig();
+  const baseUrl = window.prompt('LLM gateway URL을 입력하세요. 예: http://tailscale-ip:8787', current.baseUrl);
+  if (baseUrl === null) return null;
+  const apiKey = window.prompt('LLM API key를 입력하세요. 이 값은 이 브라우저에만 저장됩니다.', current.apiKey);
+  if (apiKey === null) return null;
+  const next = saveLlmConfig({ baseUrl, apiKey });
+  return next.baseUrl && next.apiKey ? next : null;
 }
 
 function loadLocalDraft() {
@@ -1521,7 +1553,8 @@ function editorBlocksFromDom(article = currentArticle(), lang = currentEditorLan
       const sizePt = normalizeBlockSizePt(node.dataset.sizePt || node.style.fontSize);
       const letterSpacing = normalizeLetterSpacing(node.dataset.letterSpacing || node.style.letterSpacing);
       const indentPt = normalizeParagraphIndentPt(node.dataset.indentPt || node.style.textIndent);
-      block = text || html
+      const preserveEmptyEnglishTextBlock = lang === 'en' && existing.type === 'text';
+      block = text || html || preserveEmptyEnglishTextBlock
         ? {
             type: 'text',
             text: lang === 'en' ? (existing.text ?? existing.textKo ?? '') : text,
@@ -1529,7 +1562,7 @@ function editorBlocksFromDom(article = currentArticle(), lang = currentEditorLan
             ...(lang === 'ko' ? { textKo: text } : (existing.textKo || existing.text ? { textKo: existing.textKo ?? existing.text } : {})),
             ...(html ? (lang === 'en' ? {} : { html }) : {}),
             ...(lang === 'ko' && html ? { htmlKo: html } : (existing.htmlKo || existing.html ? { htmlKo: existing.htmlKo ?? existing.html } : {})),
-            ...(lang === 'en' && html ? { htmlEn: html } : (existing.htmlEn ? { htmlEn: existing.htmlEn } : {})),
+            ...(lang === 'en' && html ? { htmlEn: html } : (lang !== 'en' && existing.htmlEn ? { htmlEn: existing.htmlEn } : {})),
             ...(lineHeight ? { lineHeight } : {}),
             ...(align ? { align } : {}),
             ...(indent ? { indent } : {}),
@@ -1597,6 +1630,295 @@ function articleForSupabase(article) {
       sortOrder: next.sort_order
     })
   };
+}
+
+function textWithoutNoteDots(html) {
+  const template = document.createElement('template');
+  template.innerHTML = sanitizeInlineHtml(html);
+  template.content.querySelectorAll?.('.note-dot').forEach((dot) => dot.remove());
+  return template.content.textContent?.trim() ?? '';
+}
+
+function noteAnchorAfterDot(dot) {
+  let node = dot.nextSibling;
+  while (node) {
+    const text = node.textContent?.trim();
+    if (text) return text.replace(/\s+/g, ' ').slice(0, 40);
+    node = node.nextSibling;
+  }
+  return '';
+}
+
+function extractHyun2NotesFromHtml(html, sourceBlockId, startIndex = 0) {
+  const template = document.createElement('template');
+  template.innerHTML = sanitizeInlineHtml(html);
+  let index = startIndex;
+  const notes = [];
+  template.content.querySelectorAll?.('.note-dot').forEach((dot) => {
+    index += 1;
+    notes.push({
+      id: `note_${index}`,
+      sourceBlockId,
+      koAnchor: noteAnchorAfterDot(dot),
+      noteKo: String(dot.dataset.note ?? ''),
+      url: sanitizeLinkUrl(dot.dataset.url),
+      image: sanitizeImageUrl(dot.dataset.image)
+    });
+  });
+  return { notes, nextIndex: index };
+}
+
+function buildHyun2LlmPayload(article = currentArticle()) {
+  const view = normalizeArticle(article);
+  const blocks = [];
+  const images = [];
+  const notes = [];
+  let textIndex = 0;
+  let imageIndex = 0;
+  let noteIndex = 0;
+
+  blocks.push({
+    id: 'title',
+    type: 'title',
+    koHtml: escapeHtml(view.titleKo ?? view.title ?? ''),
+    enHtml: view.titleEn ?? ''
+  });
+
+  view.blocks.forEach((block) => {
+    if (block.type === 'image') {
+      imageIndex += 1;
+      images.push({
+        id: `image_${imageIndex}`,
+        type: 'image',
+        captionKo: block.captionKo ?? block.caption ?? '',
+        captionEn: block.captionEn ?? ''
+      });
+      return;
+    }
+
+    textIndex += 1;
+    const id = `block_${textIndex}`;
+    const koHtml = sanitizeInlineHtml(block.htmlKo ?? block.html ?? escapeHtml(block.textKo ?? block.text ?? ''));
+    const enHtml = sanitizeInlineHtml(block.htmlEn ?? (block.textEn ? escapeHtml(block.textEn) : ''));
+    const extracted = extractHyun2NotesFromHtml(koHtml, id, noteIndex);
+    noteIndex = extracted.nextIndex;
+    notes.push(...extracted.notes);
+    blocks.push({ id, type: 'text', koHtml, enHtml });
+  });
+
+  return {
+    task: 'align_english_article',
+    articleId: view.id ?? view.slug ?? '',
+    blocks,
+    images,
+    notes
+  };
+}
+
+function strictHyun2LlmPrompt() {
+  return `You are a strict JSON transformer for Hyun2 Admin.
+Return only valid JSON. No markdown. No explanation. No comments. No code fences.
+The output MUST match this exact JSON shape:
+{
+  "blocks": [
+    {"id": "string", "enHtml": "string"}
+  ],
+  "notes": [
+    {"id": "string", "targetBlockId": "string", "enAnchor": "string", "confidence": 0.0}
+  ],
+  "images": [
+    {"id": "string", "captionEn": "string"}
+  ]
+}
+Rules:
+- Top-level keys must be exactly blocks, notes, images.
+- Do not add extra keys anywhere.
+- Preserve every id from the input.
+- The title block id is "title"; return its English text as enHtml.
+- Text blocks go in blocks only.
+- Image captions go in images only.
+- notes must include id, targetBlockId, enAnchor, confidence only.
+- targetBlockId must usually equal the note sourceBlockId.
+- enAnchor must be the English phrase inside the returned enHtml that best corresponds to koAnchor.
+- confidence must be a number between 0 and 1.
+- Preserve harmless inline tags such as <em>, <strong>, and <u> when useful.
+- Do not insert note-dot, buttons, spans, scripts, or app HTML controls.`;
+}
+
+async function requestHyun2EnglishSuggestion(payload, config) {
+  const response = await fetch(`${config.baseUrl}/api/chat`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': config.apiKey
+    },
+    body: JSON.stringify({
+      temperature: 0,
+      max_tokens: 2400,
+      messages: [
+        { role: 'system', content: strictHyun2LlmPrompt() },
+        {
+          role: 'user',
+          content: `Translate and align this Hyun2 article. Return only the exact output JSON shape specified by the system.\nInput:\n${JSON.stringify(payload)}`
+        }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    return { ok: false, reason: `llm-http-${response.status}` };
+  }
+
+  const outer = await response.json();
+  const message = String(outer.message ?? '').trim();
+  if (!message.startsWith('{') || message.includes('```')) {
+    return { ok: false, reason: 'llm-non-json' };
+  }
+
+  try {
+    return { ok: true, suggestion: JSON.parse(message) };
+  } catch {
+    return { ok: false, reason: 'llm-json-parse' };
+  }
+}
+
+function exactKeys(value, keys) {
+  const actual = Object.keys(value ?? {}).sort();
+  return actual.length === keys.length && keys.every((key, index) => actual[index] === key);
+}
+
+function sameStringSet(actual, expected) {
+  if (actual.size !== expected.size) return false;
+  return Array.from(expected).every((value) => actual.has(value));
+}
+
+function validateHyun2EnglishSuggestion(suggestion, payload) {
+  if (!suggestion || typeof suggestion !== 'object') return { ok: false, reason: 'empty suggestion' };
+  if (!exactKeys(suggestion, ['blocks', 'images', 'notes'])) return { ok: false, reason: 'wrong top-level keys' };
+  if (!Array.isArray(suggestion.blocks) || !Array.isArray(suggestion.notes) || !Array.isArray(suggestion.images)) {
+    return { ok: false, reason: 'suggestion arrays missing' };
+  }
+
+  const blockIds = new Set(payload.blocks.map((block) => block.id));
+  const imageIds = new Set(payload.images.map((image) => image.id));
+  const noteIds = new Set(payload.notes.map((note) => note.id));
+  if (!sameStringSet(new Set(suggestion.blocks.map((block) => block.id)), blockIds)) {
+    return { ok: false, reason: 'translated block ids do not match' };
+  }
+  if (!sameStringSet(new Set(suggestion.images.map((image) => image.id)), imageIds)) {
+    return { ok: false, reason: 'translated image ids do not match' };
+  }
+  if (!sameStringSet(new Set(suggestion.notes.map((note) => note.id)), noteIds)) {
+    return { ok: false, reason: 'translated note ids do not match' };
+  }
+
+  for (const block of suggestion.blocks) {
+    if (!exactKeys(block, ['enHtml', 'id'])) return { ok: false, reason: `bad block shape: ${block?.id ?? ''}` };
+    if (!blockIds.has(block.id)) return { ok: false, reason: `unknown block id: ${block.id}` };
+    const html = sanitizeInlineHtml(block.enHtml);
+    if (!html.trim() || html.includes('note-dot') || /<button/i.test(html)) {
+      return { ok: false, reason: `unsafe block html: ${block.id}` };
+    }
+  }
+
+  for (const image of suggestion.images) {
+    if (!exactKeys(image, ['captionEn', 'id'])) return { ok: false, reason: `bad image shape: ${image?.id ?? ''}` };
+    if (!imageIds.has(image.id)) return { ok: false, reason: `unknown image id: ${image.id}` };
+    if (!String(image.captionEn ?? '').trim()) return { ok: false, reason: `empty caption: ${image.id}` };
+  }
+
+  for (const note of suggestion.notes) {
+    if (!exactKeys(note, ['confidence', 'enAnchor', 'id', 'targetBlockId'])) return { ok: false, reason: `bad note shape: ${note?.id ?? ''}` };
+    if (!noteIds.has(note.id)) return { ok: false, reason: `unknown note id: ${note.id}` };
+    if (!blockIds.has(note.targetBlockId)) return { ok: false, reason: `unknown note target: ${note.targetBlockId}` };
+    if (!String(note.enAnchor ?? '').trim()) return { ok: false, reason: `empty note anchor: ${note.id}` };
+    if (!Number.isFinite(Number(note.confidence)) || Number(note.confidence) < 0 || Number(note.confidence) > 1) {
+      return { ok: false, reason: `bad note confidence: ${note.id}` };
+    }
+  }
+
+  return { ok: true };
+}
+
+function insertGeneratedNoteDot(html, anchor, sourceNote) {
+  const template = document.createElement('template');
+  template.innerHTML = sanitizeInlineHtml(html);
+  const noteTemplate = document.createElement('template');
+  noteTemplate.innerHTML = noteDotMarkup(sourceNote.noteKo, sourceNote.url, sourceNote.image);
+  const noteDot = noteTemplate.content.firstElementChild;
+  const needle = String(anchor ?? '').trim();
+
+  if (!needle) {
+    template.content.prepend(noteDot);
+    return sanitizeInlineHtml(template.innerHTML);
+  }
+
+  const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT);
+  let textNode = walker.nextNode();
+  while (textNode) {
+    const offset = textNode.nodeValue.indexOf(needle);
+    if (offset >= 0) {
+      const anchorNode = textNode.splitText(offset);
+      anchorNode.parentNode.insertBefore(noteDot, anchorNode);
+      return sanitizeInlineHtml(template.innerHTML);
+    }
+    textNode = walker.nextNode();
+  }
+
+  template.content.prepend(noteDot);
+  return sanitizeInlineHtml(template.innerHTML);
+}
+
+function applyHyun2EnglishSuggestion(article, payload, suggestion) {
+  const view = normalizeArticle(article);
+  const blockSuggestions = new Map(suggestion.blocks.map((block) => [block.id, block]));
+  const imageSuggestions = new Map(suggestion.images.map((image) => [image.id, image]));
+  const noteSuggestions = new Map(suggestion.notes.map((note) => [note.id, note]));
+  const sourceNotes = new Map(payload.notes.map((note) => [note.id, note]));
+  let textIndex = 0;
+  let imageIndex = 0;
+
+  const titleSuggestion = blockSuggestions.get('title');
+  const titleEn = titleSuggestion
+    ? textWithoutNoteDots(titleSuggestion.enHtml)
+    : view.titleEn;
+
+  const blocks = view.blocks.map((block) => {
+    if (block.type === 'image') {
+      imageIndex += 1;
+      const imageSuggestion = imageSuggestions.get(`image_${imageIndex}`);
+      return imageSuggestion
+        ? { ...block, captionEn: String(imageSuggestion.captionEn ?? '') }
+        : block;
+    }
+
+    textIndex += 1;
+    const id = `block_${textIndex}`;
+    const blockSuggestion = blockSuggestions.get(id);
+    if (!blockSuggestion) return block;
+
+    let htmlEn = sanitizeInlineHtml(blockSuggestion.enHtml);
+    suggestion.notes
+      .filter((note) => note.targetBlockId === id)
+      .sort((a, b) => Number(b.confidence) - Number(a.confidence))
+      .forEach((note) => {
+        const sourceNote = sourceNotes.get(note.id);
+        if (!sourceNote) return;
+        htmlEn = insertGeneratedNoteDot(htmlEn, note.enAnchor, sourceNote);
+      });
+
+    return {
+      ...block,
+      textEn: textWithoutNoteDots(htmlEn),
+      htmlEn
+    };
+  });
+
+  return normalizeArticle({
+    ...view,
+    titleEn,
+    blocks
+  });
 }
 
 function imageFilesFromDataTransfer(dataTransfer) {
@@ -1799,6 +2121,22 @@ function deleteSelectedImageFigure(root, statusRoot, history) {
 
 function isEditorSidePanelClick(event) {
   return Boolean(event.target.closest?.('[data-panel="side"]'));
+}
+
+function enableImageTextWrap(figure) {
+  figure.dataset.wrap = 'true';
+  if ((Number.parseFloat(figure.dataset.width) || 100) > 64) {
+    figure.dataset.width = '42';
+  }
+  if (!['left', 'right'].includes(figure.dataset.align)) {
+    figure.dataset.align = 'left';
+  }
+  if (figure.dataset.align === 'left' && !(Number.parseFloat(figure.dataset.marginRight) > 0)) {
+    figure.dataset.marginRight = String(DEFAULT_WRAP_GAP_PT);
+  }
+  if (figure.dataset.align === 'right' && !(Number.parseFloat(figure.dataset.marginLeft) > 0)) {
+    figure.dataset.marginLeft = String(DEFAULT_WRAP_GAP_PT);
+  }
 }
 
 function imageFigureFromUpload(uploaded, file) {
@@ -2787,11 +3125,10 @@ function attachImageControls(root, contentRoot, statusRoot, history) {
     } else if (action === 'left' || action === 'right' || action === 'center') {
       figure.dataset.align = action;
     } else if (action === 'wrap') {
-      figure.dataset.wrap = figure.dataset.wrap === 'true' ? 'false' : 'true';
       if (figure.dataset.wrap === 'true') {
-        const align = ['left', 'right', 'center'].includes(figure.dataset.align) ? figure.dataset.align : 'center';
-        if (align === 'left' && !(Number.parseFloat(figure.dataset.marginRight) > 0)) figure.dataset.marginRight = String(DEFAULT_WRAP_GAP_PT);
-        if (align === 'right' && !(Number.parseFloat(figure.dataset.marginLeft) > 0)) figure.dataset.marginLeft = String(DEFAULT_WRAP_GAP_PT);
+        figure.dataset.wrap = 'false';
+      } else {
+        enableImageTextWrap(figure);
       }
     }
 
@@ -3041,6 +3378,7 @@ async function renderEditor(options = {}) {
           <button type="button" data-action="theme-toggle" aria-label="${currentTheme() === 'dark' ? 'dark' : 'light'}">${themeLabel(currentTheme())}</button>
           <button type="button" data-action="editor-lang" data-lang="ko" aria-pressed="${editLang === 'ko'}">ko</button>
           <button type="button" data-action="editor-lang" data-lang="en" aria-pressed="${editLang === 'en'}">en</button>
+          <button type="button" data-action="generate-en">영어 생성</button>
           <a class="button-link" href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
           <button type="button" data-action="trash">trash</button>
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
@@ -3239,6 +3577,39 @@ async function renderEditor(options = {}) {
       await renderEditor({ article: nextArticle, statusText: `editing ${nextLang}` });
     });
   });
+
+  const generateEnglishVersion = async () => {
+    const sourceArticle = editorArticleFromDom(article, session);
+    const config = loadLlmConfig().baseUrl && loadLlmConfig().apiKey
+      ? loadLlmConfig()
+      : promptForLlmConfig();
+    if (!config) {
+      statusRoot.textContent = 'LLM config is required.';
+      return;
+    }
+
+    statusRoot.textContent = 'generating English...';
+    const payload = buildHyun2LlmPayload(sourceArticle);
+    const result = await requestHyun2EnglishSuggestion(payload, config);
+    if (!result.ok) {
+      statusRoot.textContent = `English generation failed: ${result.reason}`;
+      return;
+    }
+
+    const validation = validateHyun2EnglishSuggestion(result.suggestion, payload);
+    if (!validation.ok) {
+      statusRoot.textContent = `English generation rejected: ${validation.reason}`;
+      return;
+    }
+
+    const nextArticle = applyHyun2EnglishSuggestion(sourceArticle, payload, result.suggestion);
+    setCurrentArticle(nextArticle);
+    saveLocalDraft(nextArticle);
+    setEditorLang('en');
+    await renderEditor({ article: nextArticle, statusText: 'English generated. review then save.' });
+  };
+
+  root.querySelector('[data-action="generate-en"]')?.addEventListener('click', generateEnglishVersion);
 
   root.querySelectorAll('[data-action="select-post"]').forEach((button) => {
     button.addEventListener('click', async () => {

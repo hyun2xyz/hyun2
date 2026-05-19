@@ -15,6 +15,7 @@ test('home page renders a centered writing draft', async () => {
 
   assert.match(html, /id="article-root"/);
   assert.doesNotMatch(html, /data-admin/);
+  assert.doesNotMatch(html, /generate-en|hyun2\.llmConfig|LLM_GATEWAY_API_KEY/);
   assert.match(html, /src="\.\/src\/app\.js\?v=/);
   assert.match(css, /--bg:\s*#fff/);
   assert.match(css, /--fg:\s*#000/);
@@ -77,6 +78,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /dataTransfer\?\.items/);
   assert.match(app, /item\.kind === 'file'/);
   assert.match(app, /data-image-action="wrap"/);
+  assert.match(app, /enableImageTextWrap/);
+  assert.match(app, /figure\.dataset\.width = '42'/);
+  assert.match(app, /figure\.dataset\.align = 'left'/);
   assert.match(app, /data-panel="image"/);
   assert.match(app, /editor-side-panel/);
   assert.match(app, /data-panel="side"/);
@@ -181,6 +185,28 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, />오른쪽</);
   assert.match(app, /image layout changed/);
   assert.match(app, /data-action="save"/);
+  assert.match(app, /data-action="generate-en"/);
+  assert.match(app, /LLM_CONFIG_KEY/);
+  assert.match(app, /hyun2\.llmConfig/);
+  assert.match(app, /loadLlmConfig/);
+  assert.match(app, /saveLlmConfig/);
+  assert.match(app, /promptForLlmConfig/);
+  assert.match(app, /requestHyun2EnglishSuggestion/);
+  assert.match(app, /strictHyun2LlmPrompt/);
+  assert.match(app, /validateHyun2EnglishSuggestion/);
+  assert.match(app, /applyHyun2EnglishSuggestion/);
+  assert.match(app, /buildHyun2LlmPayload/);
+  assert.match(app, /extractHyun2NotesFromHtml/);
+  assert.match(app, /insertGeneratedNoteDot/);
+  assert.match(app, /generateEnglishVersion/);
+  assert.match(app, /titleEn/);
+  assert.match(app, /htmlEn/);
+  assert.match(app, /captionEn/);
+  assert.match(app, /setEditorLang\('en'\)/);
+  assert.match(app, /English generated/);
+  assert.doesNotMatch(app, /6a643474c193fabad3212dcaa191ed7c8065faa16aba828cd4395d16fd25af75/);
+  assert.doesNotMatch(adminHtml, /100\.91\.137\.6:8787/);
+  assert.doesNotMatch(adminHtml, /LLM_GATEWAY_API_KEY/);
   assert.match(app, /data-action="theme"/);
   assert.match(app, /savePostWithSession/);
   assert.match(app, /refreshSessionIfNeeded/);
@@ -328,6 +354,9 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /data-action="editor-lang"/);
   assert.match(app, /currentEditorLang/);
   assert.match(app, /setEditorLang/);
+  assert.match(app, /preserveEmptyEnglishTextBlock/);
+  assert.match(app, /lang === 'en' && existing\.type === 'text'/);
+  assert.match(app, /lang !== 'en' && existing\.htmlEn/);
   assert.match(app, /let blockIndex = 0/);
   assert.match(app, /existingBlocks\[blockIndex\]/);
   assert.match(app, /blockIndex \+= 1/);
