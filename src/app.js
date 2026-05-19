@@ -1760,6 +1760,45 @@ Rules:
 - Do not insert note-dot, buttons, spans, scripts, or app HTML controls.`;
 }
 
+function extractJsonObjectFromLlmMessage(message) {
+  const text = String(message ?? '').trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  const start = text.indexOf('{');
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, index + 1);
+    }
+  }
+
+  return null;
+}
+
 async function requestHyun2EnglishSuggestion(payload, config) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), LLM_REQUEST_TIMEOUT_MS);
@@ -1775,7 +1814,7 @@ async function requestHyun2EnglishSuggestion(payload, config) {
       signal: controller.signal,
       body: JSON.stringify({
         temperature: 0,
-        max_tokens: 2400,
+        max_tokens: 6000,
         messages: [
           { role: 'system', content: strictHyun2LlmPrompt() },
           {
@@ -1796,13 +1835,14 @@ async function requestHyun2EnglishSuggestion(payload, config) {
   }
 
   const outer = await response.json();
-  const message = String(outer.message ?? '').trim();
-  if (!message.startsWith('{') || message.includes('```')) {
-    return { ok: false, reason: 'llm-non-json' };
+  const message = String(outer.message ?? outer.choices?.[0]?.message?.content ?? '').trim();
+  const jsonText = extractJsonObjectFromLlmMessage(message);
+  if (!jsonText) {
+    return { ok: false, reason: 'llm-non-json', detail: message.slice(0, 120) };
   }
 
   try {
-    return { ok: true, suggestion: JSON.parse(message) };
+    return { ok: true, suggestion: JSON.parse(jsonText) };
   } catch {
     return { ok: false, reason: 'llm-json-parse' };
   }

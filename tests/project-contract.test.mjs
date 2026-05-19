@@ -196,6 +196,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /AbortController/);
   assert.match(app, /llm-timeout/);
   assert.match(app, /llm-network/);
+  assert.match(app, /extractJsonObjectFromLlmMessage/);
+  assert.match(app, /outer\.choices\?\.\[0\]\?\.message\?\.content/);
+  assert.match(app, /max_tokens:\s*6000/);
   assert.match(app, /setLlmProgress/);
   assert.match(app, /data-panel="llm-progress"/);
   assert.match(app, /35,\s*'생성'/);
