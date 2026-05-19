@@ -251,6 +251,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /reader is updated/);
   assert.match(app, /dedupePostTitles/);
   assert.match(css, /--body-line-height/);
+  assert.match(css, /\.article__body\s*\{[^}]*font-family:\s*var\(--font-gowun-batang\)/);
   assert.match(css, /\.article__body p \+ p[\s\S]*margin-top:\s*0/);
   assert.match(css, /--paragraph-indent/);
   assert.match(app, /firstTextBlockSeen/);

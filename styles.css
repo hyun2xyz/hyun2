@@ -264,6 +264,7 @@ input {
 .article__body {
   display: block;
   --image-gap: 0.55em;
+  font-family: var(--font-gowun-batang);
   font-size: var(--body-size, 20pt);
   line-height: var(--body-line-height, 1.85);
   text-align: left;
