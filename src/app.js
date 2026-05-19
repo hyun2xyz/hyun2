@@ -3430,10 +3430,10 @@ async function renderEditor(options = {}) {
 
         <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(localizedArticleTitle(article, editLang))}</h1>
         <div class="article__body editor__content" data-field="content" contenteditable="true" spellcheck="true">${articleBlocksMarkup(normalizeArticle(article).blocks, { editable: true, lang: editLang }) || '<p><br></p>'}</div>
-        <p class="editor__status">${escapeHtml(options.statusText ?? '')}</p>
       </section>
 
       <aside class="editor-side-panel" data-panel="side" aria-label="편집 옵션">
+        <p class="editor__status">${escapeHtml(options.statusText ?? '')}</p>
         <div class="editor__settings" data-panel="settings" aria-label="글자 설정">
           <label>
             date

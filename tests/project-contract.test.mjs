@@ -84,6 +84,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /data-panel="image"/);
   assert.match(app, /editor-side-panel/);
   assert.match(app, /data-panel="side"/);
+  assert.match(app, /<aside class="editor-side-panel"[\s\S]*<p class="editor__status"/);
   assert.match(app, /data-action="align-left"/);
   assert.match(app, /data-action="align-center"/);
   assert.match(app, /data-action="align-right"/);

@@ -1197,7 +1197,8 @@ input {
 
 .editor__status {
   min-height: 1.2em;
-  margin-top: 20px;
+  margin: 0 0 14px;
+  color: var(--muted);
 }
 
 .login-form {
