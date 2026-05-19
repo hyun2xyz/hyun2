@@ -191,6 +191,13 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /loadLlmConfig/);
   assert.match(app, /saveLlmConfig/);
   assert.match(app, /promptForLlmConfig/);
+  assert.match(app, /LLM_REQUEST_TIMEOUT_MS/);
+  assert.match(app, /AbortController/);
+  assert.match(app, /llm-timeout/);
+  assert.match(app, /llm-network/);
+  assert.match(app, /setLlmProgress/);
+  assert.match(app, /data-panel="llm-progress"/);
+  assert.match(app, /35,\s*'생성'/);
   assert.match(app, /requestHyun2EnglishSuggestion/);
   assert.match(app, /strictHyun2LlmPrompt/);
   assert.match(app, /validateHyun2EnglishSuggestion/);
@@ -203,6 +210,7 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(app, /htmlEn/);
   assert.match(app, /captionEn/);
   assert.match(app, /setEditorLang\('en'\)/);
+  assert.match(app, /llmProgressText:\s*'100% 완료'/);
   assert.match(app, /English generated/);
   assert.doesNotMatch(app, /6a643474c193fabad3212dcaa191ed7c8065faa16aba828cd4395d16fd25af75/);
   assert.doesNotMatch(adminHtml, /100\.91\.137\.6:8787/);
@@ -262,6 +270,10 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.article__body p\[data-first-text-block="true"\][\s\S]*text-indent:\s*0/);
   assert.doesNotMatch(css, /\.article__body p:first-of-type[\s\S]*text-indent:\s*0/);
   assert.match(css, /\.article-image--wrap/);
+  assert.match(css, /\.article-image--wrap[\s\S]*max-width:\s*64%/);
+  assert.match(css, /\.article-image--wrap[\s\S]*shape-outside:\s*margin-box/);
+  assert.match(css, /\.editor__progress/);
+  assert.match(css, /\.editor__progress\.is-error/);
   assert.match(css, /--image-margin-top/);
   assert.match(css, /--image-margin-right/);
   assert.match(css, /--image-margin-bottom/);
@@ -328,6 +340,8 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.article-image[\s\S]*margin-bottom:\s*var\(--image-margin-bottom\)/);
   assert.match(css, /\.article-image--wrap\[data-align="left"\][\s\S]*margin:\s*var\(--image-margin-top\) var\(--image-margin-right\) var\(--image-margin-bottom\) var\(--image-margin-left\)/);
   assert.match(css, /\.article-image--wrap\[data-align="right"\][\s\S]*margin:\s*var\(--image-margin-top\) var\(--image-margin-right\) var\(--image-margin-bottom\) var\(--image-margin-left\)/);
+  assert.match(app, /AUTO_WRAP_IMAGE_WIDTH/);
+  assert.match(app, /maybeAutoEnableImageWrap/);
   assert.match(css, /\.image-resize-handle/);
   assert.match(css, /\.article-image\.is-selected/);
   assert.match(css, /\.admin-layout[\s\S]*margin:\s*0 auto/);

@@ -23,6 +23,8 @@ const HYUN2_IMAGE_MOVE_TYPE = 'application/x-hyun2-image-move';
 const NOTE_IMAGE_WIDTH = 180;
 const DEFAULT_IMAGE_MARGIN_PT = 8;
 const DEFAULT_WRAP_GAP_PT = 16;
+const AUTO_WRAP_IMAGE_WIDTH = 64;
+const LLM_REQUEST_TIMEOUT_MS = 300000;
 const PARAGRAPH_FONT_OPTIONS = [
   { value: '', label: 'default', weights: [] },
   { value: 'ag-choijeongho-screen', label: 'AG Choijeongho Screen', weights: [] },
@@ -691,6 +693,19 @@ function promptForLlmConfig() {
   if (apiKey === null) return null;
   const next = saveLlmConfig({ baseUrl, apiKey });
   return next.baseUrl && next.apiKey ? next : null;
+}
+
+function setLlmProgress(root, percent = null, label = '', isError = false) {
+  const node = root.querySelector('[data-panel="llm-progress"]');
+  if (!node) return;
+
+  node.classList.toggle('is-error', Boolean(isError));
+  if (percent === null) {
+    node.textContent = label;
+    return;
+  }
+
+  node.textContent = `${percent}%${label ? ` ${label}` : ''}`;
 }
 
 function loadLocalDraft() {
@@ -1746,24 +1761,35 @@ Rules:
 }
 
 async function requestHyun2EnglishSuggestion(payload, config) {
-  const response = await fetch(`${config.baseUrl}/api/chat`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': config.apiKey
-    },
-    body: JSON.stringify({
-      temperature: 0,
-      max_tokens: 2400,
-      messages: [
-        { role: 'system', content: strictHyun2LlmPrompt() },
-        {
-          role: 'user',
-          content: `Translate and align this Hyun2 article. Return only the exact output JSON shape specified by the system.\nInput:\n${JSON.stringify(payload)}`
-        }
-      ]
-    })
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), LLM_REQUEST_TIMEOUT_MS);
+  let response;
+
+  try {
+    response = await fetch(`${config.baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': config.apiKey
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        temperature: 0,
+        max_tokens: 2400,
+        messages: [
+          { role: 'system', content: strictHyun2LlmPrompt() },
+          {
+            role: 'user',
+            content: `Translate and align this Hyun2 article. Return only the exact output JSON shape specified by the system.\nInput:\n${JSON.stringify(payload)}`
+          }
+        ]
+      })
+    });
+  } catch (error) {
+    return { ok: false, reason: error?.name === 'AbortError' ? 'llm-timeout' : 'llm-network' };
+  } finally {
+    window.clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     return { ok: false, reason: `llm-http-${response.status}` };
@@ -2125,7 +2151,7 @@ function isEditorSidePanelClick(event) {
 
 function enableImageTextWrap(figure) {
   figure.dataset.wrap = 'true';
-  if ((Number.parseFloat(figure.dataset.width) || 100) > 64) {
+  if ((Number.parseFloat(figure.dataset.width) || 100) > AUTO_WRAP_IMAGE_WIDTH) {
     figure.dataset.width = '42';
   }
   if (!['left', 'right'].includes(figure.dataset.align)) {
@@ -2137,6 +2163,16 @@ function enableImageTextWrap(figure) {
   if (figure.dataset.align === 'right' && !(Number.parseFloat(figure.dataset.marginLeft) > 0)) {
     figure.dataset.marginLeft = String(DEFAULT_WRAP_GAP_PT);
   }
+}
+
+function maybeAutoEnableImageWrap(figure) {
+  const width = Number.parseFloat(figure.dataset.width) || 100;
+  if (width > AUTO_WRAP_IMAGE_WIDTH) return;
+
+  if (!['left', 'right'].includes(figure.dataset.align)) {
+    figure.dataset.align = 'left';
+  }
+  enableImageTextWrap(figure);
 }
 
 function imageFigureFromUpload(uploaded, file) {
@@ -3072,6 +3108,7 @@ function attachImageControls(root, contentRoot, statusRoot, history) {
     const figure = selectedImageFigure(root);
     if (!figure) return;
     figure.dataset.width = event.currentTarget.value;
+    maybeAutoEnableImageWrap(figure);
     applyImageFigureSettings(figure);
     syncImagePanel(root, figure);
     statusRoot.textContent = 'image size changed. save to publish.';
@@ -3120,10 +3157,16 @@ function attachImageControls(root, contentRoot, statusRoot, history) {
 
     if (action === 'smaller') {
       figure.dataset.width = String(Math.max(18, (Number.parseFloat(figure.dataset.width) || 100) - 10));
+      maybeAutoEnableImageWrap(figure);
     } else if (action === 'larger') {
       figure.dataset.width = String(Math.min(100, (Number.parseFloat(figure.dataset.width) || 100) + 10));
     } else if (action === 'left' || action === 'right' || action === 'center') {
       figure.dataset.align = action;
+      if (action === 'center') {
+        figure.dataset.wrap = 'false';
+      } else if ((Number.parseFloat(figure.dataset.width) || 100) <= AUTO_WRAP_IMAGE_WIDTH) {
+        enableImageTextWrap(figure);
+      }
     } else if (action === 'wrap') {
       if (figure.dataset.wrap === 'true') {
         figure.dataset.wrap = 'false';
@@ -3382,6 +3425,7 @@ async function renderEditor(options = {}) {
           <a class="button-link" href="./${article.slug ? `?post=${encodeURIComponent(article.slug)}` : ''}">read</a>
           <button type="button" data-action="trash">trash</button>
           ${session ? '<button type="button" data-action="logout">logout</button>' : ''}
+          <span class="editor__progress" data-panel="llm-progress" aria-live="polite">${escapeHtml(options.llmProgressText ?? '')}</span>
         </div>
 
         <h1 class="article__title editor__title" data-field="title" contenteditable="true" spellcheck="true">${escapeHtml(localizedArticleTitle(article, editLang))}</h1>
@@ -3579,34 +3623,42 @@ async function renderEditor(options = {}) {
   });
 
   const generateEnglishVersion = async () => {
+    setLlmProgress(root, 0, '준비');
     const sourceArticle = editorArticleFromDom(article, session);
     const config = loadLlmConfig().baseUrl && loadLlmConfig().apiKey
       ? loadLlmConfig()
       : promptForLlmConfig();
     if (!config) {
+      setLlmProgress(root, null, '');
       statusRoot.textContent = 'LLM config is required.';
       return;
     }
 
+    setLlmProgress(root, 15, '분석');
     statusRoot.textContent = 'generating English...';
     const payload = buildHyun2LlmPayload(sourceArticle);
+    setLlmProgress(root, 35, '생성');
     const result = await requestHyun2EnglishSuggestion(payload, config);
     if (!result.ok) {
+      setLlmProgress(root, null, '오류', true);
       statusRoot.textContent = `English generation failed: ${result.reason}`;
       return;
     }
 
+    setLlmProgress(root, 75, '검증');
     const validation = validateHyun2EnglishSuggestion(result.suggestion, payload);
     if (!validation.ok) {
+      setLlmProgress(root, null, '오류', true);
       statusRoot.textContent = `English generation rejected: ${validation.reason}`;
       return;
     }
 
+    setLlmProgress(root, 90, '적용');
     const nextArticle = applyHyun2EnglishSuggestion(sourceArticle, payload, result.suggestion);
     setCurrentArticle(nextArticle);
     saveLocalDraft(nextArticle);
     setEditorLang('en');
-    await renderEditor({ article: nextArticle, statusText: 'English generated. review then save.' });
+    await renderEditor({ article: nextArticle, statusText: 'English generated. review then save.', llmProgressText: '100% 완료' });
   };
 
   root.querySelector('[data-action="generate-en"]')?.addEventListener('click', generateEnglishVersion);

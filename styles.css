@@ -493,15 +493,19 @@ input {
 
 .article-image--wrap {
   width: var(--image-width, 42%);
+  max-width: 64%;
+  shape-outside: margin-box;
 }
 
 .article-image--wrap[data-align="left"] {
   float: left;
+  clear: left;
   margin: var(--image-margin-top) var(--image-margin-right) var(--image-margin-bottom) var(--image-margin-left);
 }
 
 .article-image--wrap[data-align="right"] {
   float: right;
+  clear: right;
   margin: var(--image-margin-top) var(--image-margin-right) var(--image-margin-bottom) var(--image-margin-left);
 }
 
@@ -908,6 +912,17 @@ input {
   padding-bottom: 10px;
   margin-bottom: 10px;
   border-bottom: 1px solid var(--line);
+}
+
+.editor__progress {
+  margin-left: auto;
+  min-width: 72px;
+  text-align: right;
+  color: var(--muted);
+}
+
+.editor__progress.is-error {
+  color: var(--note-color);
 }
 
 .editor__settings {
