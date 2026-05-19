@@ -2064,6 +2064,36 @@ function unwrapInlineElement(element) {
   parent.normalize();
 }
 
+function restoreSelectionBetweenMarkers(startMarker, endMarker) {
+  if (!startMarker.parentNode || !endMarker.parentNode) return;
+
+  const range = document.createRange();
+  const selection = window.getSelection();
+  range.setStartAfter(startMarker);
+  range.setEndBefore(endMarker);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  startMarker.remove();
+  endMarker.remove();
+  lastEditorRange = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : range.cloneRange();
+}
+
+function preserveSelectionAroundInlineRemoval(contentRoot, range, elements) {
+  const startMarker = document.createComment('hyun2-selection-start');
+  const endMarker = document.createComment('hyun2-selection-end');
+  const endRange = range.cloneRange();
+  const startRange = range.cloneRange();
+
+  endRange.collapse(false);
+  endRange.insertNode(endMarker);
+  startRange.collapse(true);
+  startRange.insertNode(startMarker);
+
+  elements.forEach(unwrapInlineElement);
+  contentRoot.normalize();
+  restoreSelectionBetweenMarkers(startMarker, endMarker);
+}
+
 function matchingInlineElements(contentRoot, range, selector) {
   const matches = new Set();
   const addAncestor = (node) => {
@@ -2098,9 +2128,7 @@ function toggleInlineSelection(contentRoot, statusRoot, { tagName, selector, lab
 
   const existing = matchingInlineElements(contentRoot, range, selector);
   if (existing.length) {
-    existing.forEach(unwrapInlineElement);
-    contentRoot.normalize();
-    lastEditorRange = null;
+    preserveSelectionAroundInlineRemoval(contentRoot, range, existing);
     statusRoot.textContent = `${label} removed. save to publish.`;
     return;
   }
@@ -2140,6 +2168,56 @@ function italicSelection(contentRoot, statusRoot) {
     selector: 'em, i',
     label: 'italic'
   });
+}
+
+function noteDotClosestToNode(contentRoot, node) {
+  const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+  const dot = element?.closest?.('.note-dot');
+  return dot && contentRoot.contains(dot) ? dot : null;
+}
+
+function noteDotFromRange(contentRoot, range) {
+  if (!range) return null;
+  const direct = noteDotClosestToNode(contentRoot, range.startContainer)
+    ?? noteDotClosestToNode(contentRoot, range.endContainer);
+  if (direct) return direct;
+
+  return Array.from(contentRoot.querySelectorAll('.note-dot'))
+    .find((dot) => {
+      try {
+        return range.intersectsNode(dot);
+      } catch {
+        return false;
+      }
+    }) ?? null;
+}
+
+function selectedNoteDot(contentRoot) {
+  const openDot = contentRoot.querySelector('.note-dot.is-open');
+  if (openDot) return openDot;
+
+  const range = selectionRangeIn(contentRoot) ?? fallbackEditorRange(contentRoot);
+  return noteDotFromRange(contentRoot, range);
+}
+
+function deleteSelectedNoteDot(contentRoot, statusRoot) {
+  const dot = selectedNoteDot(contentRoot);
+  if (!dot) {
+    statusRoot.textContent = 'select a footnote first.';
+    return;
+  }
+
+  const range = document.createRange();
+  range.setStartBefore(dot);
+  range.collapse(true);
+  dot.remove();
+  contentRoot.normalize();
+
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  lastEditorRange = range.cloneRange();
+  statusRoot.textContent = 'footnote deleted. save to publish.';
 }
 
 function insertHyperlinkNote(contentRoot, statusRoot) {
@@ -2401,6 +2479,11 @@ function attachEditorFormatting(root, contentRoot, statusRoot, session, article,
 
   root.querySelector('[data-action="link"]')?.addEventListener('click', () => {
     insertHyperlinkNote(contentRoot, statusRoot);
+    history.commit();
+  });
+
+  root.querySelector('[data-action="note-delete"]')?.addEventListener('click', () => {
+    deleteSelectedNoteDot(contentRoot, statusRoot);
     history.commit();
   });
 
@@ -2962,6 +3045,9 @@ async function renderEditor(options = {}) {
             </button>
             <button class="text-tool icon-tool" type="button" data-action="link" title="하이퍼링크 각주" aria-label="하이퍼링크">
               <span class="tool-icon tool-icon--link" aria-hidden="true"></span>
+            </button>
+            <button class="text-tool icon-tool" type="button" data-action="note-delete" title="선택한 각주 삭제" aria-label="각주 삭제">
+              <span class="tool-icon tool-icon--note-delete" aria-hidden="true"></span>
             </button>
             <button class="text-tool icon-tool" type="button" data-action="note-image-upload" title="이미지 각주 업로드" aria-label="이미지 각주 업로드">
               <span class="tool-icon tool-icon--image-note" aria-hidden="true"></span>

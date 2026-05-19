@@ -242,6 +242,9 @@ test('admin page can sign in, list titles, set pt sizes, and save writing', asyn
   assert.match(css, /\.image-panel/);
   assert.match(css, /\.editor-side-panel/);
   assert.match(css, /\.editor-side-panel[\s\S]*position:\s*fixed/);
+  assert.match(css, /\.editor-side-panel[\s\S]*max-height:\s*calc\(100vh - 48px\)/);
+  assert.match(css, /\.editor-side-panel[\s\S]*overflow-y:\s*auto/);
+  assert.match(css, /\.editor-side-panel[\s\S]*overscroll-behavior:\s*contain/);
   assert.match(css, /input\[name="displayDate"\][\s\S]*width:\s*100%/);
   assert.match(css, /\.editor__inline-tools[\s\S]*display:\s*inline-flex/);
   assert.match(css, /\.editor-align-tools/);
@@ -355,6 +358,9 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /selection\.removeAllRanges\(\)/);
   assert.match(app, /toggleInlineSelection/);
   assert.match(app, /unwrapInlineElement/);
+  assert.match(app, /preserveSelectionAroundInlineRemoval/);
+  assert.match(app, /restoreSelectionBetweenMarkers/);
+  assert.doesNotMatch(app, /lastEditorRange = null;\s*statusRoot\.textContent = `\$\{label\} removed/);
   assert.match(app, /range\.extractContents\(\)/);
   assert.match(app, /document\.createElement\('strong'\)/);
   assert.match(app, /document\.createElement\('u'\)/);
@@ -371,6 +377,10 @@ test('reader and editor support index-only, mobile top, word wrapping, annotatio
   assert.match(app, /tool-icon--link/);
   assert.match(app, /editor__inline-tools/);
   assert.match(app, /data-action="link"/);
+  assert.match(app, /data-action="note-delete"/);
+  assert.match(app, /selectedNoteDot/);
+  assert.match(app, /deleteSelectedNoteDot/);
+  assert.match(app, /footnote deleted\. save to publish/);
   assert.match(app, /data-action="note-image-upload"/);
   assert.match(app, /name="noteImageUpload"/);
   assert.match(app, /type="file"/);
